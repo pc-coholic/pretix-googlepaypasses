@@ -1,6 +1,7 @@
 import logging
 import subprocess
 import tempfile
+import json
 
 from django import forms
 from django.core.exceptions import ValidationError
@@ -11,52 +12,23 @@ from pretix.control.forms import ClearableBasenameFileInput
 logger = logging.getLogger(__name__)
 
 
-def validate_rsa_privkey(value: str):
+def validate_json_credentials(value: str):
     value = value.strip()
-    if not value:
-        return
-    if not value.startswith('-----BEGIN RSA PRIVATE KEY-----') or not value.endswith('-----END RSA PRIVATE KEY-----'):
+    try:
+        json_data = json.loads(value)
+    except:
         raise ValidationError(
-            _('This does not look like a RSA private key in PEM format (it misses the begin or end signifiers)'),
+            _('This does not look like valid JSON data. Please copy paste the '
+            'entire contents of the credentials JSON-file.'),
         )
 
-
-class CertificateFileField(forms.FileField):
-    widget = ClearableBasenameFileInput
-
-    def clean(self, value, *args, **kwargs):
-        value = super().clean(value, *args, **kwargs)
-        if isinstance(value, UploadedFile):
-            value.open('rb')
-            value.seek(0)
-            content = value.read()
-            if content.startswith(b'-----BEGIN CERTIFICATE-----') and b'-----BEGIN CERTIFICATE-----' in content:
-                return SimpleUploadedFile('cert.pem', content, 'text/plain')
-
-            openssl_cmd = [
-                'openssl',
-                'x509',
-                '-inform',
-                'DER',
-                '-outform',
-                'PEM',
-            ]
-            process = subprocess.Popen(
-                openssl_cmd,
-                stderr=subprocess.PIPE,
-                stdout=subprocess.PIPE,
-                stdin=subprocess.PIPE,
-            )
-            process.stdin.write(content)
-            pem, error = process.communicate()
-            if process.returncode != 0:
-                logger.info('Trying to convert a DER to PEM failed: {}'.format(error))
-                raise ValidationError(
-                    _('This does not look like a X509 certificate in either PEM or DER format'),
-                )
-
-            return SimpleUploadedFile('cert.pem', pem, 'text/plain')
-        return value
+    if not all (k in json_data for k in ("type", "project_id", "private_key_id", "private_key",
+                                    "client_email", "client_id", "auth_uri", "token_uri",
+                                    "auth_provider_x509_cert_url", "client_x509_cert_url")):
+        raise ValidationError(
+            _('It seems like the credentials-file is missing some vital information. '
+            'Please make sure that you pasted the entire contents of the file.'),
+        )
 
 
 class PNGImageField(forms.FileField):

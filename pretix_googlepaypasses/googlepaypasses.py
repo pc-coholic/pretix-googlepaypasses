@@ -15,11 +15,11 @@ from wallet.models import Barcode, BarcodeFormat, EventTicket, Location, Pass
 from .forms import PNGImageField
 
 
-class PassbookOutput(BaseTicketOutput):
-    identifier = 'passbook'
-    verbose_name = 'Passbook Tickets'
+class WalletobjectOutput(BaseTicketOutput):
+    identifier = 'googlepaypasses'
+    verbose_name = 'Google Pay Passes'
     download_button_icon = 'fa-mobile'
-    download_button_text = _('Wallet/Passbook')
+    download_button_text = _('Google Pay Passes')
     multi_download_enabled = False
 
     @property
