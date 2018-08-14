@@ -13,7 +13,7 @@ from .forms import validate_json_credentials
 @receiver(register_ticket_outputs, dispatch_uid='output_googlepaypasses')
 def register_ticket_output(sender, **kwargs):
     from .googlepaypasses import WalletobjectOutput
-    return PassbookOutput
+    return WalletobjectOutput
 
 
 @receiver(register_global_settings, dispatch_uid='googlepaypasses_settings')
