@@ -24,15 +24,15 @@ cmdclass = {
 
 
 setup(
-    name='pretix-passbook',
-    version='1.3.1',
-    description='Passbook tickets for pretix',
+    name='pretix-googlepaypasses',
+    version='1.0.0',
+    description='Google Pay Passes for pretix',
     long_description=long_description,
-    url='https://github.com/pretix/pretix-passbook',
-    author='Tobias Kunze',
-    author_email='rixx@cutebit.de',
+    url='https://github.com/pc-coholic/pretix-googlepaypasses',
+    author='Martin Gross',
+    author_email='martin@pc-coholic.de',
 
-    install_requires=['wallet-py3k', 'googlemaps'],
+    install_requires=[],
     packages=find_packages(exclude=['tests', 'tests.*']),
     include_package_data=True,
     cmdclass=cmdclass,

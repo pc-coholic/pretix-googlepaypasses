@@ -1,3 +1,3 @@
-recursive-include pretix_passbook/static *
-recursive-include pretix_passbook/templates *
-recursive-include pretix_passbook/locale *
+recursive-include pretix_googlepaypasses/static *
+recursive-include pretix_googlepaypasses/templates *
+recursive-include pretix_googlepaypasses/locale *

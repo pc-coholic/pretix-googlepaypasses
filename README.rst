@@ -1,14 +1,13 @@
-pretix-passbook
-===============
+pretix-googlepaypasses
+======================
 
-.. image:: https://img.shields.io/pypi/v/pretix-passbook.svg
-   :target: https://pypi.python.org/pypi/pretix-passbook
+.. image:: https://img.shields.io/pypi/v/pretix-googlepaypasses.svg
+   :target: https://pypi.python.org/pypi/pretix-googlepaypasses
 
-.. image:: https://travis-ci.org/pretix/pretix-passbook.svg?branch=master
-   :target: https://travis-ci.org/pretix/pretix-passbook
+This is a plugin for `pretix`_. It allows to provide tickets in the Walletobjects-format, that can be added to Google
+Pay.
 
-This is a plugin for `pretix`_. It allows to provide tickets in the passbook format supported by Apple Wallet and a
-number of Android apps.
+This is a work in progress and quite possibly not working yet.
 
 Contributing
 ------------
@@ -16,15 +15,12 @@ Contributing
 If you like to contribute to this project, you are very welcome to do so. If you have any
 questions in the process, please do not hesitate to ask us.
 
-Please note that we have a `Code of Conduct`_ in place that applies to all project contributions, including issues,
-pull requests, etc.
-
 Development setup
 ^^^^^^^^^^^^^^^^^
 
 1. Make sure that you have a working `pretix development setup`_.
 
-2. Clone this repository, eg to ``local/pretix-passbook``.
+2. Clone this repository, eg to ``local/pretix-googlepaypasses``.
 
 3. Activate the virtual environment you use for pretix development.
 
@@ -36,26 +32,24 @@ Development setup
    the 'plugins' tab in the settings.
 
 
-Generating Passbook keys
-------------------------
+Issuer ID / Google Pay API for Passes Merchant ID
+-------------------------------------------------
 
-You can generate a key and CSR using::
-
-    openssl genrsa -out pass-pretix.key 2048
-    openssl req -new -key pass-pretix.key -out pass-pretix.csr
-
-You can then request a certificate using that CSR in your `Apple developer account`_.
+As of now, the access to the Google Pay Passes API is invite only. In order to receive an Issuer ID, you will need to 
+request access. This can be done by filling the form provided on the `Google Pay API for passes developer page`_.
 
 
 License
 -------
 
-Copyright 2016 Tobias 'rixx' Kunze and Raphael Michel
+Copyright 2018 Martin Gross
+
+Based on the `pretix-passbook plugin`_ by Tobias 'rixx' Kunze and Raphael Michel
 
 Released under the terms of the Apache License 2.0
 
 
-.. _Apple developer account: https://developer.apple.com/account/ios/certificate/
 .. _pretix: https://github.com/pretix/pretix
-.. _Code of Conduct: https://docs.pretix.eu/en/latest/development/contribution/codeofconduct.html
+.. _pretix-passbook plugin: https://github.com/pretix/pretix-passbook
 .. _pretix development setup: https://docs.pretix.eu/en/latest/development/setup.html
+.. _Google Pay API for passes developer page: https://developers.google.com/pay/passes/
