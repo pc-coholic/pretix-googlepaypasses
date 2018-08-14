@@ -10,7 +10,6 @@ from django.utils.translation import ugettext, ugettext_lazy as _
 from pretix.base.models import OrderPosition
 from pretix.base.ticketoutput import BaseTicketOutput
 from pretix.multidomain.urlreverse import build_absolute_uri
-from wallet.models import Barcode, BarcodeFormat, EventTicket, Location, Pass
 
 from .forms import PNGImageField
 
@@ -26,25 +25,38 @@ class WalletobjectOutput(BaseTicketOutput):
     def settings_form_fields(self) -> dict:
         return OrderedDict(
             list(super().settings_form_fields.items()) + [
-                ('icon',
-                 PNGImageField(
-                     label=_('Event icon'),
-                     help_text=_('Display size is 29 x 29 pixels. We suggest an upload size of 87 x 87 pixels to '
-                                 'support retina displays.'),
-                     required=True,
+                ('dataprotection_approval',
+                 forms.BooleanField(
+                    label=_('I agree to transmit my participants\' personal data to Google Inc.'),
+                    help_text=_('Please be aware, that contrary to other virtual wallets/passes (like Apple Wallet), '
+                                'Google Pay Passes are not handled offline. Every pass that is created will be '
+                                'transmitted to Google Inc.'
+                                '<br><br>'
+                                'Your participants will be prompted to agree before each transmission, but you might '
+                                'want to add a section concerning this issue to your privacy policy.'
+                                '<br><br>'
+                                'If you require more information or guidance on this subject, please contact your '
+                                'legal counsel.'),
+                    required=False,
                  )),
                 ('logo',
                  PNGImageField(
                      label=_('Event logo'),
-                     help_text=_('Display size is 160 x 50 pixels. We suggest an upload size of 480 x 150 pixels to '
-                                 'support retina displays.'),
-                     required=True,
+                     help_text=_('<a href="https://developers.google.com/pay/passes/guides/pass-verticals/event-tickets/design">#1</a> '
+                                 '- Minimum size is 660 x 660 pixels. We suggest an upload size of 1200 x 1200 pixels.'
+                                 '<br><br>'
+                                 'Please see <a href="https://developers.google.com/pay/passes/guides/get-started/api-guidelines/brand-guidelines#logo-image-guidelines">'
+                                 'Google Pay API for Passes Brand guidelines</a> for more detailed information.'),
+                     required=False,
                  )),
-                ('background',
+                ('hero',
                  PNGImageField(
-                     label=_('Pass background image'),
-                     help_text=_('Display size is 180 x 220 pixels. We suggest an upload size of 540 x 660 pixels to '
-                                 'support retina displays.'),
+                     label=_('Hero image'),
+                     help_text=_('<a href="https://developers.google.com/pay/passes/guides/pass-verticals/event-tickets/design">#6</a> '
+                                 '- Minimum aspect ratio is 3:1, or wider. We suggest an upload size of 1032 x 336 pixels.'
+                                 '<br><br>'
+                                 'Please see <a href="https://developers.google.com/pay/passes/guides/get-started/api-guidelines/brand-guidelines#hero-image-guidelines">'
+                                 'Google Pay API for Passes Brand guidelines</a> for more detailed information.'),
                      required=False,
                  )),
                 ('latitude',
@@ -64,87 +76,8 @@ class WalletobjectOutput(BaseTicketOutput):
         order = order_position.order
         ev = order_position.subevent or order.event
         tz = pytz.timezone(order.event.settings.timezone)
-
-        card = EventTicket()
-
-        card.addPrimaryField('eventName', str(ev.name), ugettext('Event'))
-
-        ticket = str(order_position.item.name)
-        if order_position.variation:
-            ticket += ' - ' + str(order_position.variation)
-        card.addSecondaryField('ticket', ticket, ugettext('Product'))
-
-        if order_position.attendee_name:
-            card.addBackField('name', order_position.attendee_name, ugettext('Attendee name'))
-
-        card.addBackField('email', order.email, ugettext('Ordered by'))
-        card.addBackField('organizer', str(order.event.organizer), ugettext('Organizer'))
-        if order.event.settings.contact_mail:
-            card.addBackField('organizerContact', order.event.settings.contact_mail, ugettext('Organizer contact'))
-        card.addBackField('orderCode', order.code, ugettext('Order code'))
-
-        card.addAuxiliaryField('doorsOpen', ev.get_date_from_display(tz), ugettext('From'))
-        if order.event.settings.show_date_to:
-            card.addAuxiliaryField('doorsClose', ev.get_date_to_display(tz), ugettext('To'))
-
-        if order_position.subevent:
-            card.addBackField('website', build_absolute_uri(order.event, 'presale:event.index', {
-                'subevent': order_position.subevent.pk
-            }), ugettext('Website'))
-        else:
-            card.addBackField('website', build_absolute_uri(order.event, 'presale:event.index'), ugettext('Website'))
-
-        passfile = Pass(
-            card,
-            passTypeIdentifier=order.event.settings.passbook_pass_type_id,
-            organizationName=order.event.settings.passbook_organizer_name,
-            teamIdentifier=order.event.settings.passbook_team_id,
-        )
-
-        passfile.serialNumber = '%s-%s-%s-%d' % (order.event.organizer.slug, order.event.slug, order.code,
-                                                 order_position.pk)
-        passfile.description = ugettext('Ticket for {}').format(ev.name)
-        passfile.barcode = Barcode(message=order_position.secret, format=BarcodeFormat.QR)
-        passfile.barcode.altText = order_position.secret
-        # passfile.logoText = str(ev.name)
-        passfile.relevantDate = ev.date_from.astimezone(tz).isoformat()
-
-        if self.event.settings.passbook_latitude and self.event.settings.passbook_longitude:
-            passfile.locations = Location(self.event.settings.passbook_latitude, self.event.settings.passbook_longitude)
-
-        icon_file = self.event.settings.get('ticketoutput_passbook_icon')
-        passfile.addFile('icon.png', default_storage.open(icon_file.name, 'rb'))
-
-        logo_file = self.event.settings.get('ticketoutput_passbook_logo')
-        passfile.addFile('logo.png', default_storage.open(logo_file.name, 'rb'))
-
-        bg_file = self.event.settings.get('ticketoutput_passbook_background')
-        if bg_file:
-            passfile.addFile('background.png', default_storage.open(bg_file.name, 'rb'))
-
-        filename = '{}-{}.pkpass'.format(order.event.slug, order.code)
-
-        with tempfile.NamedTemporaryFile('w', encoding='utf-8') as keyfile, \
-                tempfile.NamedTemporaryFile('w', encoding='utf-8') as certfile, \
-                tempfile.NamedTemporaryFile('w', encoding='utf-8') as cafile:
-
-            certfile.write(order.event.settings.passbook_certificate_file.read())
-            certfile.flush()
-
-            cafile.write(order.event.settings.passbook_wwdr_certificate_file.read())
-            cafile.flush()
-
-            keyfile.write(order.event.settings.passbook_key)
-            keyfile.flush()
-            _pass = passfile.create(
-                certfile.name,
-                keyfile.name,
-                cafile.name,
-                order.event.settings.get('passbook_key_password', '')
-            )
-
-        _pass.seek(0)
-        return filename, 'application/vnd.apple.pkpass', _pass.read()
+        
+        return
 
     def settings_content_render(self, request) -> str:
         if self.event.settings.get('passbook_gmaps_api_key') and self.event.location:
