@@ -148,7 +148,7 @@ class PassbookOutput(BaseTicketOutput):
 
     def settings_content_render(self, request) -> str:
         if self.event.settings.get('passbook_gmaps_api_key') and self.event.location:
-            template = get_template('pretix_passbook/form.html')
+            template = get_template('pretix_googlepaypasses/form.html')
             return template.render({
                 'request': request
             })

@@ -3,16 +3,16 @@ from django.utils.functional import cached_property
 from django.utils.translation import ugettext_lazy
 
 
-class PassbookApp(AppConfig):
-    name = 'pretix_passbook'
-    verbose_name = 'Passbook Tickets'
+class GooglePayPassesApp(AppConfig):
+    name = 'pretix_googlepaypasses'
+    verbose_name = 'Google Pay Passes'
 
     class PretixPluginMeta:
-        name = ugettext_lazy('Passbook Tickets')
-        author = 'Tobias Kunze, Raphael Michel'
-        description = ugettext_lazy('Provides passbook tickets for pretix')
+        name = ugettext_lazy('Google Pay Passes')
+        author = 'Martin Gross'
+        description = ugettext_lazy('Provides Google Pay Passes for pretix')
         visible = True
-        version = '1.3.1'
+        version = '1.0.0'
 
     def ready(self):
         from . import signals  # NOQA
@@ -35,4 +35,4 @@ class PassbookApp(AppConfig):
         return errs
 
 
-default_app_config = 'pretix_passbook.PassbookApp'
+default_app_config = 'pretix_googlepaypasses.GooglePayPassesApp'
