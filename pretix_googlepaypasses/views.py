@@ -5,6 +5,9 @@ from django.views import View
 from googlemaps import Client
 from googlemaps.exceptions import ApiError
 from pretix.control.permissions import EventPermissionRequiredMixin
+from pretix.presale.views.order import OrderDetailMixin
+
+from .googlepaypasses import WalletobjectOutput
 
 logger = logging.getLogger(__name__)
 
@@ -25,9 +28,16 @@ class GeoCodeView(EventPermissionRequiredMixin, View):
                 'result': r
             })
 
-def generateWalletObject(request, *args, **kwargs):
-        
-        return JsonResponse({
-            'status': 'ok',
-            'result': 'Lololo'
-        })
+class GenerateWalletObject(OrderDetailMixin, View):
+    def get(self, request, *args, **kwargs):
+        if self.order:
+            JWT = WalletobjectOutput.getWalletObjectJWT(self.order)
+
+            return JsonResponse({
+                'status': 'ok',
+                'result': JWT
+            })
+        else:
+            return JsonResponse({
+                'status': 'error',
+            })

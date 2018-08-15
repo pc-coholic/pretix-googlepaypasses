@@ -11,8 +11,10 @@ from pretix.base.models import OrderPosition
 from pretix.base.ticketoutput import BaseTicketOutput
 from pretix.multidomain.urlreverse import build_absolute_uri
 
-from .forms import PNGImageField
+from google.oauth2 import service_account
+from google.auth.transport.requests import AuthorizedSession
 
+from .forms import PNGImageField
 
 class WalletobjectOutput(BaseTicketOutput):
     identifier = 'googlepaypasses'
@@ -85,3 +87,22 @@ class WalletobjectOutput(BaseTicketOutput):
             return template.render({
                 'request': request
             })
+
+    def getWalletObjectJWT(order):
+        if order:
+            authed_session = WalletobjectOutput.getAuthedSession(order.event.settings)
+            return "JWT Token should be here"
+        else:
+            return False
+
+    def getAuthedSession(settings):
+        try:
+            credentials = service_account.Credentials.from_service_account_info(
+                json.loads(settings.get('googlepaypasses_credentials')),
+                scopes=['https://www.googleapis.com/auth/wallet_object.issuer'],
+            )
+
+            authed_session = AuthorizedSession(credentials)
+            return authed_session
+        except:
+            return False

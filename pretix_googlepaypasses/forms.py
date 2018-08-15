@@ -8,6 +8,7 @@ from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile, UploadedFile
 from django.utils.translation import ugettext_lazy as _
 from pretix.control.forms import ClearableBasenameFileInput
+from google.oauth2 import service_account
 
 logger = logging.getLogger(__name__)
 
@@ -15,21 +16,15 @@ logger = logging.getLogger(__name__)
 def validate_json_credentials(value: str):
     value = value.strip()
     try:
-        json_data = json.loads(value)
+        credentials = service_account.Credentials.from_service_account_info(
+            json.loads(value),
+            scopes=['https://www.googleapis.com/auth/wallet_object.issuer'],
+        )
     except:
         raise ValidationError(
-            _('This does not look like valid JSON data. Please copy paste the '
-            'entire contents of the credentials JSON-file.'),
+            _('It seems like the credentials-file is not correct. '
+              'Please make sure that you pasted the entire contents of the file.'),
         )
-
-    if not all (k in json_data for k in ("type", "project_id", "private_key_id", "private_key",
-                                    "client_email", "client_id", "auth_uri", "token_uri",
-                                    "auth_provider_x509_cert_url", "client_x509_cert_url")):
-        raise ValidationError(
-            _('It seems like the credentials-file is missing some vital information. '
-            'Please make sure that you pasted the entire contents of the file.'),
-        )
-
 
 class PNGImageField(forms.FileField):
     widget = ClearableBasenameFileInput
