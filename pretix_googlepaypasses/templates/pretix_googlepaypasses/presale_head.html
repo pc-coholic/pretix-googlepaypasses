@@ -1,0 +1,36 @@
+{% load i18n %}
+{% load staticfiles %}
+{% load static %}
+{% load compress %}
+
+<script type="text/javascript" src="{% static "pretix_googlepaypasses/button.js" %}" async></script>
+
+<div class="modal fade" id="googlepaypassesmodal" tabindex="-1" role="dialog" aria-hidden="true">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="exampleModalLabel">{% trans "Privacy notice" %}</h5>
+      </div>
+      <div class="modal-body">
+        {% blocktrans trimmed %}
+        Please be aware, that contrary to other virtual wallets/passes (like Apple Wallet),
+        Google Pay Passes are not handled offline. Every pass that is created, has to be
+        transmitted to Google Inc.
+        <br><br>
+        By clicking the "Save to phone"-button below, we will transfer some of your personal
+        information, which is necessary to provide you with your Google Pay Pass, to Google Inc.
+        <br><br>
+        Please be aware, that there is no way to delete the data, once it has been transmitted.
+        <br><br>
+        However we will anonymize all passes that are not linked to a device on a regular,
+        best effort basis. While this will remove your personal information from the pass, we
+        cannot guarantee that Google is not keeping a history of the previous passes.
+        {% endblocktrans %}
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-dismiss="modal">{% trans "Abort" %}</button>
+        <a class="btn btn-primary"><span class="fa fa-google"></span>{% trans " Pay | Save to phone" %}</a>
+      </div>
+    </div>
+  </div>
+</div>

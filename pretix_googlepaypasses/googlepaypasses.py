@@ -18,7 +18,7 @@ class WalletobjectOutput(BaseTicketOutput):
     identifier = 'googlepaypasses'
     verbose_name = 'Google Pay Passes'
     download_button_icon = 'fa-mobile'
-    download_button_text = _('Google Pay Passes')
+    download_button_text = _('Add to Google Pay')
     multi_download_enabled = False
 
     @property
@@ -37,7 +37,7 @@ class WalletobjectOutput(BaseTicketOutput):
                                 '<br><br>'
                                 'If you require more information or guidance on this subject, please contact your '
                                 'legal counsel.'),
-                    required=False,
+                    required=True,
                  )),
                 ('logo',
                  PNGImageField(
@@ -76,8 +76,8 @@ class WalletobjectOutput(BaseTicketOutput):
         order = order_position.order
         ev = order_position.subevent or order.event
         tz = pytz.timezone(order.event.settings.timezone)
-        
-        return
+
+        return 'googlepaypass-%s-%s.html' % (self.event.slug, order.code), 'text/html', "Hello World"
 
     def settings_content_render(self, request) -> str:
         if self.event.settings.get('passbook_gmaps_api_key') and self.event.location:

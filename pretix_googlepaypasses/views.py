@@ -24,3 +24,10 @@ class GeoCodeView(EventPermissionRequiredMixin, View):
                 'status': 'ok',
                 'result': r
             })
+
+def generateWalletObject(request, *args, **kwargs):
+        
+        return JsonResponse({
+            'status': 'ok',
+            'result': 'Lololo'
+        })
