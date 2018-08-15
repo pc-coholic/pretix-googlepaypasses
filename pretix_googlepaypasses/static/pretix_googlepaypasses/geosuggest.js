@@ -1,6 +1,6 @@
 /*global $, gettext*/
 $(function () {
-    var $container = $("#passbook-gmaps-result");
+    var $container = $("#googlepaypasses-gmaps-result");
     $container.html("<span class='fa fa-cog fa-spin'></span> " + gettext("Loading suggested geolocations…"));
     $.post(
         $container.attr("data-url"),
@@ -25,8 +25,8 @@ $(function () {
                 }
                 $container.append($ul);
                 $ul.on("click", "a", function (e) {
-                    $("#id_ticketoutput_passbook_longitude").val($(this).attr("data-lng"));
-                    $("#id_ticketoutput_passbook_latitude").val($(this).attr("data-lat"));
+                    $("#id_ticketoutput_googlepaypasses_longitude").val($(this).attr("data-lng"));
+                    $("#id_ticketoutput_googlepaypasses_latitude").val($(this).attr("data-lat"));
                     e.preventDefault();
                     return false;
                 })

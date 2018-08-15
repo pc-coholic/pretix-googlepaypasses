@@ -4,7 +4,7 @@ from pretix.multidomain import event_url
 from . import views
 
 urlpatterns = [
-    url(r'^control/event/(?P<organizer>[^/]+)/(?P<event>[^/]+)/passbookoutput/geocode/$',
+    url(r'^control/event/(?P<organizer>[^/]+)/(?P<event>[^/]+)/googlepaypasses/geocode/$',
         views.GeoCodeView.as_view(),
         name='geocode'),
 ]

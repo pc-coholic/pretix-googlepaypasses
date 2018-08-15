@@ -1,6 +1,8 @@
 import tempfile
 from collections import OrderedDict
 from typing import Tuple
+import uuid
+import json
 
 import pytz
 from django import forms
@@ -9,7 +11,8 @@ from django.template.loader import get_template
 from django.utils.translation import ugettext, ugettext_lazy as _
 from pretix.base.models import OrderPosition
 from pretix.base.ticketoutput import BaseTicketOutput
-from pretix.multidomain.urlreverse import build_absolute_uri
+from pretix.multidomain.urlreverse import build_absolute_uri, eventreverse
+from pretix.base.settings import GlobalSettingsObject
 
 from google.oauth2 import service_account
 from google.auth.transport.requests import AuthorizedSession
@@ -90,8 +93,9 @@ class WalletobjectOutput(BaseTicketOutput):
 
     def getWalletObjectJWT(order):
         if order:
-            authed_session = WalletobjectOutput.getAuthedSession(order.event.settings)
-            return "JWT Token should be here"
+            authedSession = WalletobjectOutput.getAuthedSession(order.event.settings)
+            eventticketClass = WalletobjectOutput.getOrGenerateEventticketClass(order, authedSession)
+            return "JWT Token should be here; Class: %s" % (eventticketClass)
         else:
             return False
 
@@ -102,7 +106,78 @@ class WalletobjectOutput(BaseTicketOutput):
                 scopes=['https://www.googleapis.com/auth/wallet_object.issuer'],
             )
 
-            authed_session = AuthorizedSession(credentials)
-            return authed_session
+            authedSession = AuthorizedSession(credentials)
+            return authedSession
         except:
             return False
+
+    def constructClassName(order):
+        gs = GlobalSettingsObject()
+        if not gs.settings.update_check_id:
+            gs.settings.set('update_check_id', uuid.uuid4().hex)
+
+        issuerId = order.event.settings.get('googlepaypasses_issuer_id')
+
+        return "%s.pretix-%s-%s-%s" % (issuerId, gs.settings.update_check_id, order.event.organizer.slug, order.event.slug)
+
+    def getOrGenerateEventticketClass(order, authedSession):
+        eventticketclassName = WalletobjectOutput.constructClassName(order)
+        result = authedSession.get(
+            'https://www.googleapis.com/walletobjects/v1/eventTicketClass/%s'
+                % (eventticketclassName)
+        )
+        if result.status_code == 404:
+            WalletobjectOutput.generateEventticketClass(order, authedSession)
+            pass
+
+        return eventticketclassName
+
+    def generateEventticketClass(order, authedSession):
+        eventticketclassName = WalletobjectOutput.constructClassName(order)
+
+        eventticket_class = {
+            'kind': 'walletobjects#eventTicketClass',
+            'id': eventticketclassName,
+            'issuerName': order.event.organizer.name,
+            'linksModuleData': {
+                'uris': [{
+                    'kind': 'walletobjects#uri',
+                    'uri': 'mailto:%s' % order.event.settings.mail_from,
+                    'description': order.event.settings.mail_from
+                }]
+            }
+        }
+
+        if (order.event.settings.ticketoutput_googlepaypasses_latitude
+                and order.event.settings.ticketoutput_googlepaypasses_longitude):
+            eventticket_class['locations'] = [{
+                'kind': 'walletobjects#latLongPoint',
+                'latitude': order.event.settings.ticketoutput_googlepaypasses_latitude,
+                'longitude': order.event.settings.ticketoutput_googlepaypasses_longitude
+            }]
+
+        if order.event.settings.ticketoutput_googlepaypasses_logo:
+            #print(order.event.settings.ticketoutput_googlepaypasses_logo.url)
+            #print(build_absolute_uri(order.event, ''))
+            eventticket_class['logo'] = {
+                "kind": "walletobjects#image",
+                "sourceUri": {
+                    "kind": "walletobjects#uri",
+                    "uri": 'https://www.google.com/images/branding/googlelogo/2x/googlelogo_color_272x92dp.png',
+                    #"description": 'Baconrista stadium logo'
+                }
+            }
+
+        if order.event.settings.ticketoutput_googlepaypasses_hero:
+            #print(order.event.settings.ticketoutput_googlepaypasses_hero.url)
+            #print(build_absolute_uri(order.event, ''))
+            eventticket_class['heroImage'] = {
+                "kind": "walletobjects#image",
+                "sourceUri": {
+                    "kind": "walletobjects#uri",
+                    "uri": 'https://www.google.com/images/branding/googlelogo/2x/googlelogo_color_272x92dp.png',
+                    #"description": 'Baconrista stadium logo'
+                }
+            }
+
+        #print(eventticket_class)
