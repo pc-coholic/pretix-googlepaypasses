@@ -18,7 +18,7 @@ class WalletobjectOutput(BaseTicketOutput):
     identifier = 'googlepaypasses'
     verbose_name = 'Google Pay Passes'
     download_button_icon = 'fa-google'
-    download_button_text = _('Add to Google Pay')
+    download_button_text = _('Pay | Save to phone')
     multi_download_enabled = False
 
     @property
