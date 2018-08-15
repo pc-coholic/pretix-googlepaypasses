@@ -17,7 +17,7 @@ from .forms import PNGImageField
 class WalletobjectOutput(BaseTicketOutput):
     identifier = 'googlepaypasses'
     verbose_name = 'Google Pay Passes'
-    download_button_icon = 'fa-mobile'
+    download_button_icon = 'fa-google'
     download_button_text = _('Add to Google Pay')
     multi_download_enabled = False
 
