@@ -8,14 +8,21 @@ import pytz
 from django import forms
 from django.core.files.storage import default_storage
 from django.template.loader import get_template
+from django.utils import translation
 from django.utils.translation import ugettext, ugettext_lazy as _
 from pretix.base.models import OrderPosition
 from pretix.base.ticketoutput import BaseTicketOutput
 from pretix.multidomain.urlreverse import build_absolute_uri, eventreverse
 from pretix.base.settings import GlobalSettingsObject
+from django.conf import settings
 
 from google.oauth2 import service_account
 from google.auth.transport.requests import AuthorizedSession
+
+from urllib.parse import urljoin
+
+from walletobjects import eventTicketClass
+from walletobjects.constants import reviewStatus, multipleDevicesAndHoldersAllowedStatus, confirmationCode, doorsOpen
 
 from .forms import PNGImageField
 
@@ -80,7 +87,7 @@ class WalletobjectOutput(BaseTicketOutput):
     def generate(self, order_position: OrderPosition) -> Tuple[str, str, str]:
         order = order_position.order
         ev = order_position.subevent or order.event
-        tz = pytz.timezone(order.event.settings.timezone)
+        tz = pytz.timezone(order.event.settings.get('timezone'))
 
         return 'googlepaypass-%s-%s.html' % (self.event.slug, order.code), 'text/html', "Hello World"
 
@@ -113,12 +120,12 @@ class WalletobjectOutput(BaseTicketOutput):
 
     def constructClassName(order):
         gs = GlobalSettingsObject()
-        if not gs.settings.update_check_id:
+        if not gs.settings.get('update_check_id'):
             gs.settings.set('update_check_id', uuid.uuid4().hex)
 
         issuerId = order.event.settings.get('googlepaypasses_issuer_id')
 
-        return "%s.pretix-%s-%s-%s" % (issuerId, gs.settings.update_check_id, order.event.organizer.slug, order.event.slug)
+        return "%s.pretix-%s-%s-%s" % (issuerId, gs.settings.get('update_check_id'), order.event.organizer.slug, order.event.slug)
 
     def getOrGenerateEventticketClass(order, authedSession):
         eventticketclassName = WalletobjectOutput.constructClassName(order)
@@ -133,485 +140,100 @@ class WalletobjectOutput(BaseTicketOutput):
         return eventticketclassName
 
     def generateEventticketClass(order, authedSession):
+        gs = GlobalSettingsObject()
         eventticketclassName = WalletobjectOutput.constructClassName(order)
 
-        eventticket_class = {
-            'kind': 'walletobjects#eventTicketClass',
-            'id': eventticketclassName,
-            'issuerName': order.event.organizer.name,
-        }
+        evTclass = eventTicketClass(
+            order.event.organizer.name,
+            eventticketclassName,
+            multipleDevicesAndHoldersAllowedStatus.multipleHolders, # TODO: Make configurable
+            order.event.name,
+            reviewStatus.underReview,
+            order.event.settings.locale
+        )
 
-        # TODO: I18n
-        eventticket_class['localizedIssuerName'] = {
-            'kind': 'walletobjects#localizedString',
-            'translatedValues': [{
-                'kind': 'walletobjects#translatedString',
-                'language': 'FIXME',
-                'value': 'FIXME'
-            }],
-            'defaultValue': {
-                'kind': 'walletobjects#translatedString',
-                'language': 'FIXME',
-                'value': 'FIXME'
-            }
-        }
+        #evTclass.localizedIssuerName()
+        #evTclass.messages()
 
-        # Not used at this moment
-        # Up to 10 messages can be placed
-        '''
-        eventticket_class['messages'] = [{
-            'kind': 'walletobjects#walletObjectMessage',
-            'header': 'String',
-            'localizedHeader': {
-                'kind': 'walletobjects#localizedString',
-                'translatedValues': [{
-                    'kind': 'walletobjects#translatedString',
-                    'language': 'de_DE',
-                    'value': 'String'
-                }],
-                'defaultValue': {
-                    'kind': 'walletobjects#translatedString',
-                    'language': 'de_DE',
-                    'value': 'String'
-                }
-            },
-            'body': 'String',
-            'localizedBody': {
-                'kind': 'walletobjects#localizedString',
-                'translatedValues': [{
-                    'kind': 'walletobjects#translatedString',
-                    'language': 'de_DE',
-                    'value': 'String'
-                }],
-                'defaultValue': {
-                    'kind': 'walletobjects#translatedString',
-                    'language': 'de_DE',
-                    'value': 'String'
-                }
-            },
-            'displayInterval': {
-                'kind': 'walletobjects#timeInterval',
-                'start': {
-                    'date': '1985-04-12T23:20:50.52Z'
-                },
-                'end': {
-                    'date': '1985-04-12T25:20:50.52Z'
-                }
-            },
-            'id': 'UUID',
-            'messageType': 'expirationNotification' or 'text'
-        }]
-        '''
+        evTclass.homepageUri(
+            build_absolute_uri(order.event, 'presale:event.index'),
+            WalletobjectOutput.getTranslatedString('Website', order.event.settings.get('locale')),
+            WalletobjectOutput.getTranslatedDict('Website', order.event.settings.get('locales'))
+        )
 
-        # TODO: I18n
-        eventticket_class['homepageUri'] = {
-            'kind': 'walletobjects#uri',
-            'uri': 'FIXME',
-            'description': 'FIXME',
-            'localizedDescription': {
-                'kind': 'walletobjects#localizedString',
-                'translatedValues': [{
-                    'kind': 'walletobjects#translatedString',
-                    'language': 'de_DE',
-                    'value': 'FIXME'
-                }],
-                'defaultValue': {
-                    'kind': 'walletobjects#translatedString',
-                    'language': 'de_DE',
-                    'value': 'FIXME'
-                }
-            }
-        }
+        #evTclass.imageModulesData()
+        #evTclass.linksModuleData()
 
-        if (order.event.settings.ticketoutput_googlepaypasses_latitude
-                and order.event.settings.ticketoutput_googlepaypasses_longitude):
-            eventticket_class['locations'] = [{
-                'kind': 'walletobjects#latLongPoint',
-                'latitude': order.event.settings.ticketoutput_googlepaypasses_latitude,
-                'longitude': order.event.settings.ticketoutput_googlepaypasses_longitude
-            }]
+        if (order.event.settings.get('ticketoutput_googlepaypasses_latitude')
+            and order.event.settings.get('ticketoutput_googlepaypasses_longitude')):
+                evTclass.locations(
+                    order.event.settings.get('ticketoutput_googlepaypasses_latitude'),
+                    order.event.settings.get('ticketoutput_googlepaypasses_longitude')
+                )
 
-        # TODO: Proper state machine handling
-        eventticket_class['reviewStatus'] = 'draft' # 'draft' || 'underReview' || 'approved' || 'rejected'
+        #evTclass.textModulesData()
 
-        # Not used at this moment
-        '''
-        eventticket_class['infoModuleData']: {
-            'labelValueRows': [{
-                'columns': [{
-                    'label': 'String',
-                    'localizedLabel': {
-                        'kind': 'walletobjects#localizedString',
-                        'translatedValues': [{
-                            'kind': 'walletobjects#translatedString',
-                            'language': 'de_DE',
-                            'value': 'FIXME'
-                        }],
-                        'defaultValue': {
-                            'kind': 'walletobjects#translatedString',
-                            'language': 'de_DE',
-                            'value': 'FIXME'
-                        }
-                    },
-                    'value': 'String',
-                    'localizedLabel': {
-                        'kind': 'walletobjects#localizedString',
-                        'translatedValues': [{
-                            'kind': 'walletobjects#translatedString',
-                            'language': 'de_DE',
-                            'value': 'FIXME'
-                        }],
-                        'defaultValue': {
-                            'kind': 'walletobjects#translatedString',
-                            'language': 'de_DE',
-                            'value': 'FIXME'
-                        }
-                    }
-                }]
-            }]
-        }
-        '''
+        evTclass.countryCode(order.event.settings.get('locale'))
+        evTclass.hideBarcode(False)
 
-        # Not used at this moment
-        # Even though this is an array, only 1 image can be placed
-        '''
-        eventticket_class['imageModulesData'] = [{
-            'mainImage': {
-                'kind': 'walletobjects#image',
-                'sourceUri': {
-                    'kind': 'walletobjects#uri',
-                    'uri': 'String',
-                    'description': 'String',
-                    'localizedDescription': {
-                        'kind': 'walletobjects#localizedString',
-                        'translatedValues': [{
-                            'kind': 'walletobjects#translatedString',
-                            'language': 'de_DE',
-                            'value': 'FIXME'
-                        }],
-                        'defaultValue': {
-                            'kind': 'walletobjects#translatedString',
-                            'language': 'de_DE',
-                            'value': 'FIXME'
-                        }
-                    }
-                }
-            }
-        }]
-        '''
+        if order.event.settings.get('ticketoutput_googlepaypasses_hero'):
+            evTclass.heroImage(
+                urljoin(settings.SITE_URL, order.event.settings.get('ticketoutput_googlepaypasses_hero').url),
+                str(order.event.name),
+                order.event.name,
+            )
 
-        # Not used at this moment
-        # Up to 10 textmodules can be placed
-        '''
-        eventticket_class['textModulesData'] = [{
-            'header': 'String',
-            'body': 'String',
-            'localizedHeader': {
-                'kind': 'walletobjects#localizedString',
-                'translatedValues': [{
-                    'kind': 'walletobjects#translatedString',
-                    'language': 'de_DE',
-                    'value': 'String'
-                }],
-                'defaultValue': {
-                    'kind': 'walletobjects#translatedString',
-                    'language': 'de_DE',
-                    'value': 'String'
-                }
-            },
-            'localizedBody': {
-                'kind': 'walletobjects#localizedString',
-                'translatedValues': [{
-                    'kind': 'walletobjects#translatedString',
-                    'language': 'de_DE',
-                    'value': 'String'
-                }],
-                'defaultValue': {
-                    'kind': 'walletobjects#translatedString',
-                    'language': 'de_DE',
-                    'value': 'String'
-                }
-            }
-        }]
-        '''
+        evTclass.hexBackgroundColor(order.event.settings.get('primary_color'))
+        evTclass.eventId('pretix-%s-%s-%s' % (gs.settings.get('update_check_id'), order.event.organizer.slug, order.event.slug))
 
-        # TODO: I18n
-        # Up to 10 linkmodules can be placed
-        eventticket_class['linksModuleData'] = {
-            'uris': [{
-                'kind': 'walletobjects#uri',
-                'uri': 'mailto:%s' % order.event.settings.mail_from,
-                'description': order.event.settings.mail_from,
-                'localizedDescription': {
-                    'kind': 'walletobjects#localizedString',
-                    'translatedValues': [{
-                        'kind': 'walletobjects#translatedString',
-                        'language': 'de_DE',
-                        'value': 'FIXME'
-                    }],
-                    'defaultValue': {
-                        'kind': 'walletobjects#translatedString',
-                        'language': 'de_DE',
-                        'value': 'FIXME'
-                    }
-                }
-            }]
-        }
+        if order.event.settings.get('ticketoutput_googlepaypasses_logo'):
+            evTclass.logo(
+                urljoin(settings.SITE_URL, order.event.settings.get('ticketoutput_googlepaypasses_logo').url),
+                str(order.event.name),
+                order.event.name,
+            )
 
-        eventticket_class['countryCode'] = 'FIXME' # TODO: de_DE or DE?
-        eventticket_class['hideBarcode'] = False
+        if order.event.location:
+            name = {}
+            address = {}
 
-        # TODO: Proper URL concat
-        # TODO: I18n
-        if order.event.settings.ticketoutput_googlepaypasses_hero:
-            #print(order.event.settings.ticketoutput_googlepaypasses_hero.url)
-            #print(build_absolute_uri(order.event, ''))
-            eventticket_class['heroImage'] = {
-                "kind": "walletobjects#image",
-                "sourceUri": {
-                    "kind": "walletobjects#uri",
-                    "uri": 'https://www.google.com/images/branding/googlelogo/2x/googlelogo_color_272x92dp.png',
-                    #"description": 'String',
-                    'localizedDescription': {
-                        'kind': 'walletobjects#localizedString',
-                        'translatedValues': [{
-                            'kind': 'walletobjects#translatedString',
-                            'language': 'de_DE',
-                            'value': 'FIXME'
-                        }],
-                        'defaultValue': {
-                            'kind': 'walletobjects#translatedString',
-                            'language': 'de_DE',
-                            'value': 'FIXME'
-                        }
-                    }
-                }
-            }
+            for key, value in order.event.location.data.items():
+                name[key] = value.splitlines()[0]
+                address[key] = value.splitlines()[1]
 
-        eventticket_class['hexBackgroundColor'] = 'FIXME' # TODO: get from settings
-        eventticket_class['multipleDevicesAndHoldersAllowedStatus'] = 'FIXME' # 'multipleHolders' || 'oneUserAllDevices' # TODO: Implement Setting
+            evTclass.venue(name, address)
 
-        # TODO: I18n
-        eventticket_class['eventName'] = {
-            'kind': 'walletobjects#localizedString',
-            'translatedValues': [{
-                'kind': 'walletobjects#translatedString',
-                'language': 'de_DE',
-                'value': 'FIXME'
-            }],
-            'defaultValue': {
-                'kind': 'walletobjects#translatedString',
-                'language': 'de_DE',
-                'value': 'FIXME'
-            }
+        if order.event.date_from and order.event.date_to and order.event.date_admission:
+            evTclass.dateTime(
+                doorsOpen.doorsOpen,
+                str(order.event.date_admission),
+                str(order.event.date_from),
+                str(order.event.date_to),
+            )
 
-        }
+        #evTclass.finePrint()
 
-        eventticket_class['eventId'] = 'UUID' # TODO: Use Main-Event UUID/constructClassName
+        evTclass.confirmationCodeLabel(confirmationCode.orderNumber)
 
-        # TODO: Proper URL concat
-        # TODO: I18n
-        if order.event.settings.ticketoutput_googlepaypasses_logo:
-            #print(order.event.settings.ticketoutput_googlepaypasses_logo.url)
-            #print(build_absolute_uri(order.event, ''))
-            eventticket_class['logo'] = {
-                "kind": "walletobjects#image",
-                "sourceUri": {
-                    "kind": "walletobjects#uri",
-                    "uri": 'https://www.google.com/images/branding/googlelogo/2x/googlelogo_color_272x92dp.png',
-                    #"description": 'String',
-                    'localizedDescription': {
-                        'kind': 'walletobjects#localizedString',
-                        'translatedValues': [{
-                            'kind': 'walletobjects#translatedString',
-                            'language': 'de_DE',
-                            'value': 'FIXME'
-                        }],
-                        'defaultValue': {
-                            'kind': 'walletobjects#translatedString',
-                            'language': 'de_DE',
-                            'value': 'FIXME'
-                        }
-                    }
-                }
-            }
+        #evTclass.seatLabel()
+        #evTclass.rowLabel()
+        #evTclass.sectionLabel()
+        #evTclass.gateLabel()
 
-        # TODO: I18n
-        eventticket_class['venue'] = {
-            'kind': 'walletobjects#eventVenue',
-            'name': {
-                'kind': 'walletobjects#localizedString',
-                'translatedValues': [{
-                    'kind': 'walletobjects#translatedString',
-                    'language': 'de_DE',
-                    'value': 'FIXME'
-                }],
-                'defaultValue': {
-                    'kind': 'walletobjects#translatedString',
-                    'language': 'de_DE',
-                    'value': 'FIXME'
-                }
-            },
-            'address': {
-                'kind': 'walletobjects#localizedString',
-                'translatedValues': [{
-                    'kind': 'walletobjects#translatedString',
-                    'language': 'de_DE',
-                    'value': 'FIXME'
-                }],
-                'defaultValue': {
-                    'kind': 'walletobjects#translatedString',
-                    'language': 'de_DE',
-                    'value': 'FIXME'
-                }
-            }
-        }
+        print(evTclass)
 
-        # TODO: I18n
-        # TODO: check if set
-        # Either doorsOpenLabel or customDoorsOpenLabel
-        eventticket_class['dateTime'] = {
-            'kind': 'walletobjects#eventDateTime',
-            'doorsOpenLabel': 'doorsOpen', # 'doorsOpen' || 'gatesOpen'
-            '''
-            'customDoorsOpenLabel': {
-                'kind': 'walletobjects#localizedString',
-                'translatedValues': [{
-                    'kind': 'walletobjects#translatedString',
-                    'language': 'de_DE',
-                    'value': 'FIXME'
-                }],
-                'defaultValue': {
-                    'kind': 'walletobjects#translatedString',
-                    'language': 'de_DE',
-                    'value': 'FIXME'
-                }
-            },
-            '''
-            'doorsOpen': '1985-04-12T23:20:50.52Z ',
-            'start': '1985-04-12T23:20:50.52Z ',
-            'end': '1985-04-12T25:20:50.52Z '
-        }
+    def getTranslatedDict(string, locales):
+        translatedDict = {}
 
-        # Not used at this moment
-        '''
-        eventticket_class['finePrint']: {
-            'kind': 'walletobjects#localizedString',
-            'translatedValues': [{
-                'kind': 'walletobjects#translatedString',
-                'language': 'de_DE',
-                'value': 'FIXME'
-            }],
-            'defaultValue': {
-                'kind': 'walletobjects#translatedString',
-                'language': 'de_DE',
-                'value': 'FIXME'
-            }
-        }
-        '''
+        for locale in locales:
+            translation.activate(locale)
+            translatedDict[locale] = ugettext(string)
+            translation.deactivate()
 
-        # Either confirmationCodeLabel or customConfirmationCodeLabel
-        eventticket_class['confirmationCodeLabel'] = 'orderNumber' # 'confirmationCode' || 'confirmationNumber' || 'orderNumber' || 'reservationNumber'
+        return translatedDict
 
-        # Not used at this moment
-        '''
-        eventticket_class['customConfirmationCodeLabel'] = {
-            'kind': 'walletobjects#localizedString',
-            'translatedValues': [{
-                'kind': 'walletobjects#translatedString',
-                'language': 'de_DE',
-                'value': 'FIXME'
-            }],
-            'defaultValue': {
-                'kind': 'walletobjects#translatedString',
-                'language': 'de_DE',
-                'value': 'FIXME'
-            }
-        }
-        '''
-
-        # Not used at this moment
-        # Either seatLabel or customSeatLabel
-        #eventticket_class['seatLabel'] = 'seat'
-
-        # Not used at this moment
-        '''
-        eventticket_class['customSeatLabel'] = {
-            'kind': 'walletobjects#localizedString',
-            'translatedValues': [{
-                'kind': 'walletobjects#translatedString',
-                'language': 'de_DE',
-                'value': 'FIXME'
-            }],
-            'defaultValue': {
-                'kind': 'walletobjects#translatedString',
-                'language': 'de_DE',
-                'value': 'FIXME'
-            }
-        }
-        '''
-
-        # Not used at this moment
-        # Either rowLabel or customRowLabel
-        #eventticket_class['rowLabel'] = 'row'
-
-        # Not used at this moment
-        '''
-        eventticket_class['customRowLabel'] = {
-            'kind': 'walletobjects#localizedString',
-            'translatedValues': [{
-                'kind': 'walletobjects#translatedString',
-                'language': 'de_DE',
-                'value': 'FIXME'
-            }],
-            'defaultValue': {
-                'kind': 'walletobjects#translatedString',
-                'language': 'de_DE',
-                'value': 'FIXME'
-            }
-        }
-        '''
-
-        # Not used at this moment
-        # Either sectionLabel or customSectionLabel
-        #eventticket_class['sectionLabel'] = 'section' || 'theater'
-
-        # Not used at this moment
-        '''
-        eventticket_class['customSectionLabel'] = {
-            'kind': 'walletobjects#localizedString',
-            'translatedValues': [{
-                'kind': 'walletobjects#translatedString',
-                'language': 'de_DE',
-                'value': 'FIXME'
-            }],
-            'defaultValue': {
-                'kind': 'walletobjects#translatedString',
-                'language': 'de_DE',
-                'value': 'FIXME'
-            }
-        }
-        '''
-
-        # Not used at this moment
-        # Either gateLabel or customGateLabel
-        #eventticket_class['gateLabel'] = 'door' || 'entrance' || 'gate'
-
-        # Not used at this moment
-        '''
-        eventticket_class['customGateLabel'] = {
-            'kind': 'walletobjects#localizedString',
-            'translatedValues': [{
-                'kind': 'walletobjects#translatedString',
-                'language': 'de_DE',
-                'value': 'FIXME'
-            }],
-            'defaultValue': {
-                'kind': 'walletobjects#translatedString',
-                'language': 'de_DE',
-                'value': 'FIXME'
-            }
-        }
-        '''
-
-        #print(eventticket_class)
+    def getTranslatedString(string, locale):
+        translation.activate(locale)
+        translatedString = ugettext(string)
+        translation.deactivate()
+        return translatedString
