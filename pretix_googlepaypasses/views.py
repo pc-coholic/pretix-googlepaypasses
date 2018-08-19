@@ -1,6 +1,6 @@
 import logging
 
-from django.http import JsonResponse
+from django.http import JsonResponse, HttpResponse
 from django.views import View
 from googlemaps import Client
 from googlemaps.exceptions import ApiError
@@ -31,12 +31,13 @@ class GeoCodeView(EventPermissionRequiredMixin, View):
 class GenerateWalletObject(OrderDetailMixin, View):
     def get(self, request, *args, **kwargs):
         if self.order:
-            JWT = WalletobjectOutput.getWalletObjectJWT(self.order)
+            JWT = WalletobjectOutput.getWalletObjectJWT(self.order, kwargs['position'])
+            if not JWT:
+                return JsonResponse({
+                    'status': 'error',
+                })
 
-            return JsonResponse({
-                'status': 'ok',
-                'result': JWT
-            })
+            return HttpResponse('<a href="https://www.android.com/payapp/savetoandroidpay/%s">Add to GPay</a>' % JWT)
         else:
             return JsonResponse({
                 'status': 'error',
