@@ -113,7 +113,8 @@ class WalletobjectOutput(BaseTicketOutput):
         if not eventTicketClass:
             return False
 
-        op = OrderPosition.objects.get(order=order, positionid=positionid)
+        op = OrderPosition.objects.get(order=order, id=positionid)
+
         if not op:
             return False
 
@@ -178,7 +179,7 @@ class WalletobjectOutput(BaseTicketOutput):
             return False
 
     def getOrGenerateEventTicketObject(op, authedSession):
-        meta_info = json.loads(op.meta_info)
+        meta_info = json.loads(op.meta_info or '{}')
 
         if 'googlepaypass' in meta_info:
             #eventTicketObject = WalletobjectOutput.generateEventTicketObject(op, authedSession, ship=False)
@@ -301,7 +302,7 @@ class WalletobjectOutput(BaseTicketOutput):
 
     def generateEventTicketObject(op, authedSession, update=False, ship=True):
         eventTicketClassName = WalletobjectOutput.constructClassID(op.order)
-        meta_info = json.loads(op.meta_info)
+        meta_info = json.loads(op.meta_info or '{}')
 
         if update:
             evTobjectID = meta_info['googlepaypass']
@@ -356,14 +357,17 @@ class WalletobjectOutput(BaseTicketOutput):
             return evTobject
 
     def generateWalletobjectJWT(settings, payload):
+        credentials = json.loads(settings.get('googlepaypasses_credentials'))
+
         button = buttonJWT(
-            origins=['http://localhost/'],
-            issuer='pretix-googlepaypasses@pretix-gpaypasses.iam.gserviceaccount.com',
+            origins=[settings.SITE_URL],
+            issuer=credentials['client_email'],
             eventTicketObjects = [json.loads(str(payload))],
         )
-        signer = crypt.RSASigner.from_service_account_info(json.loads(settings.get('googlepaypasses_credentials')))
+        signer = crypt.RSASigner.from_service_account_info(credentials)
         payload = json.loads(str(button))
         encoded = jwt.encode(signer, payload)
+
         if not encoded:
             return False
 

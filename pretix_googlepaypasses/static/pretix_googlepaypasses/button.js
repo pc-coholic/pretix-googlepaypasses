@@ -9,10 +9,8 @@ $(function() {
 
   $('a[href*="googlepaypasses"]').click(function(event) {
     event.preventDefault();
+    $('#googlepaypassesmodal .btn-primary').attr('href', $(this).attr('href') + '/generate');
     $('#googlepaypassesmodal').modal('toggle');
     return false;
   });
-
-  $('#googlepaypassesmodal .btn-primary')
-    .attr('href', $('a[href*="googlepaypasses"]').attr('href') + '/generate');
 });

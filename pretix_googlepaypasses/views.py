@@ -1,6 +1,6 @@
 import logging
 
-from django.http import JsonResponse, HttpResponse
+from django.http import JsonResponse, HttpResponseRedirect
 from django.views import View
 from googlemaps import Client
 from googlemaps.exceptions import ApiError
@@ -37,7 +37,7 @@ class GenerateWalletObject(OrderDetailMixin, View):
                     'status': 'error',
                 })
 
-            return HttpResponse('<a href="https://www.android.com/payapp/savetoandroidpay/%s">Add to GPay</a>' % JWT)
+            return HttpResponseRedirect('https://www.android.com/payapp/savetoandroidpay/%s' % JWT)
         else:
             return JsonResponse({
                 'status': 'error',
