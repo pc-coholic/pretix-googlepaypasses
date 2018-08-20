@@ -67,7 +67,6 @@ def logentry_post_save(sender, instance, **kwargs):
         if 'position' and 'positionid' in instanceData:
             # {"position": 4, "positionid": 1} --> changed OrderPosition
             op = OrderPosition.objects.get(order=instance.object_id, id=instanceData['position'])
-            #regenerateWalletObject(op, WalletobjectOutput.getAuthedSession(op.order.event.settings))
             WalletobjectOutput.shredEventTicketObject(op, WalletobjectOutput.getAuthedSession(op.order.event.settings))
         else:
             # {} --> whole changed Order

@@ -133,7 +133,6 @@ class WalletobjectOutput(BaseTicketOutput):
         if not walletobjectJWT:
             return False
 
-        #return 'JWT Token should be here; Class: %s; Object: %s; JWT: %s' % (eventTicketClass, eventTicketObject['id'], walletobjectJWT)
         return walletobjectJWT
 
     def getAuthedSession(settings):
@@ -165,9 +164,9 @@ class WalletobjectOutput(BaseTicketOutput):
 
         issuerId = op.order.event.settings.get('googlepaypasses_issuer_id')
 
-        return "%s.pretix-%s-%s-%s-%s-%s" % (issuerId, gs.settings.get('update_check_id'),
+        return "%s.pretix-%s-%s-%s-%s-%s-%s" % (issuerId, gs.settings.get('update_check_id'),
                                              op.order.event.organizer.slug, op.order.event.slug,
-                                             op.order.code, op.positionid)
+                                             op.order.code, op.positionid, uuid.uuid4().hex)
 
     def getOrgenerateEventTicketClass(order, authedSession):
         eventTicketClassName = WalletobjectOutput.constructClassID(order)
@@ -378,7 +377,11 @@ class WalletobjectOutput(BaseTicketOutput):
         return encoded.decode("utf-8")
 
     def shredEventTicketObject(op, authedSession):
-        meta_info = json.loads(op.meta_info)
+        meta_info = json.loads(op.meta_info or '{}')
+
+        if 'googlepaypass' not in meta_info:
+            return True
+
         evTobjectID = meta_info['googlepaypass']
         eventTicketClassName = WalletobjectOutput.constructClassID(op.order)
         evTobject = eventTicketObject(evTobjectID, eventTicketClassName, objectState.inactive, op.order.event.settings.locale)
