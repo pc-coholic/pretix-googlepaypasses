@@ -120,7 +120,7 @@ class WalletobjectOutput(BaseTicketOutput):
 
         eventTicketObject = WalletobjectOutput.getOrGenerateEventTicketObject(op, authedSession)
 
-        if not str(eventTicketObject):
+        if not eventTicketObject:
             return False
 
         walletobjectJWT = WalletobjectOutput.generateWalletobjectJWT(order.event.settings, eventTicketObject)
@@ -187,12 +187,12 @@ class WalletobjectOutput(BaseTicketOutput):
         else:
             eventTicketObject = WalletobjectOutput.generateEventTicketObject(op, authedSession)
 
-        if str(eventTicketObject) and 'googlepaypass' not in meta_info:
+        if eventTicketObject and 'googlepaypass' not in meta_info:
             meta_info['googlepaypass'] = eventTicketObject['id']
             op.meta_info = json.dumps(meta_info)
             op.save(update_fields=['meta_info'])
             return eventTicketObject
-        elif str(eventTicketObject) and 'googlepaypass' in meta_info:
+        elif eventTicketObject and 'googlepaypass' in meta_info:
             return eventTicketObject
         else:
             return False
