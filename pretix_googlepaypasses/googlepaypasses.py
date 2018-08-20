@@ -3,14 +3,19 @@ from collections import OrderedDict
 from typing import Tuple
 import uuid
 import json
+from decimal import Decimal
 
 import pytz
+from django.utils.timezone import now
+from datetime import timedelta
 from django import forms
 from django.core.files.storage import default_storage
 from django.template.loader import get_template
 from django.utils import translation
 from django.utils.translation import ugettext, ugettext_lazy as _
-from pretix.base.models import OrderPosition
+from pretix.base.models import (
+    Event, Item, Order, OrderPosition, Organizer,
+)
 from pretix.base.ticketoutput import BaseTicketOutput
 from pretix.multidomain.urlreverse import build_absolute_uri, eventreverse
 from pretix.base.settings import GlobalSettingsObject
@@ -182,8 +187,7 @@ class WalletobjectOutput(BaseTicketOutput):
         meta_info = json.loads(op.meta_info or '{}')
 
         if 'googlepaypass' in meta_info:
-            #eventTicketObject = WalletobjectOutput.generateEventTicketObject(op, authedSession, ship=False)
-            eventTicketObject = WalletobjectOutput.generateEventTicketObject(op, authedSession, ship=True, update=True)
+            eventTicketObject = WalletobjectOutput.generateEventTicketObject(op, authedSession, ship=False)
         else:
             eventTicketObject = WalletobjectOutput.generateEventTicketObject(op, authedSession)
 
@@ -372,6 +376,29 @@ class WalletobjectOutput(BaseTicketOutput):
             return False
 
         return encoded.decode("utf-8")
+
+    def shredEventTicketObject(op, authedSession):
+        meta_info = json.loads(op.meta_info)
+        evTobjectID = meta_info['googlepaypass']
+        eventTicketClassName = WalletobjectOutput.constructClassID(op.order)
+        evTobject = eventTicketObject(evTobjectID, eventTicketClassName, objectState.inactive, op.order.event.settings.locale)
+
+        result = authedSession.put(
+            'https://www.googleapis.com/walletobjects/v1/eventTicketObject/%s?strict=true' % evTobjectID,
+            json = json.loads(str(evTobject))
+        )
+
+        if result.status_code == 200:
+            # Remove googlepaypass from OrderPostition meta_info once it has been shredded
+            meta_info.pop('googlepaypass')
+            op.meta_info = json.dumps(meta_info)
+            op.save(update_fields=['meta_info'])
+
+            return True
+        else:
+            print(result.status_code)
+            print(result.text)
+            return False
 
     def getTranslatedDict(string, locales):
         translatedDict = {}

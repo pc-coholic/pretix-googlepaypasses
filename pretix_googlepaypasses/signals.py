@@ -1,4 +1,5 @@
 from collections import OrderedDict
+import json
 
 from django import forms
 from django.dispatch import receiver
@@ -9,6 +10,10 @@ from pretix.base.signals import (
     register_global_settings, register_ticket_outputs,
 )
 from pretix.presale.signals import html_head as html_head_presale
+from django.db.models.signals import post_save
+from pretix.base.models import LogEntry, OrderPosition
+
+from pretix_googlepaypasses.googlepaypasses import WalletobjectOutput
 
 from .forms import validate_json_credentials
 
@@ -16,7 +21,6 @@ from .forms import validate_json_credentials
 def register_ticket_output(sender, **kwargs):
     from .googlepaypasses import WalletobjectOutput
     return WalletobjectOutput
-
 
 @receiver(register_global_settings, dispatch_uid='googlepaypasses_settings')
 def register_global_settings(sender, **kwargs):
@@ -54,3 +58,19 @@ def html_head_presale(sender, request=None, **kwargs):
         return template.render({})
     else:
         return ""
+
+@receiver(post_save, sender=LogEntry, dispatch_uid="googlepaypasses_logentry_post_save")
+def logentry_post_save(sender, instance, **kwargs):
+    if instance.action_type in ['pretix.event.order.secret.changed', 'pretix.event.order.changed.secret']:
+        instanceData = json.loads(instance.data)
+
+        if 'position' and 'positionid' in instanceData:
+            # {"position": 4, "positionid": 1} --> changed OrderPosition
+            op = OrderPosition.objects.get(order=instance.object_id, id=instanceData['position'])
+            #regenerateWalletObject(op, WalletobjectOutput.getAuthedSession(op.order.event.settings))
+            WalletobjectOutput.shredEventTicketObject(op, WalletobjectOutput.getAuthedSession(op.order.event.settings))
+        else:
+            # {} --> whole changed Order
+            ops = OrderPosition.objects.filter(order=instance.object_id)
+            for op in ops:
+                WalletobjectOutput.shredEventTicketObject(op, WalletobjectOutput.getAuthedSession(op.order.event.settings))
