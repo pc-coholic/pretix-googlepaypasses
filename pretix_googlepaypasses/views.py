@@ -1,6 +1,6 @@
 import logging
 
-from django.http import JsonResponse, HttpResponseRedirect
+from django.http import HttpResponseRedirect, JsonResponse
 from django.views import View
 from googlemaps import Client
 from googlemaps.exceptions import ApiError
@@ -27,6 +27,7 @@ class GeoCodeView(EventPermissionRequiredMixin, View):
                 'status': 'ok',
                 'result': r
             })
+
 
 class GenerateWalletObject(OrderDetailMixin, View):
     def get(self, request, *args, **kwargs):

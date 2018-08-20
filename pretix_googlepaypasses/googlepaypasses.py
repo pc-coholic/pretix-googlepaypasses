@@ -1,36 +1,29 @@
-import tempfile
+import json
+import uuid
 from collections import OrderedDict
 from typing import Tuple
-import uuid
-import json
-from decimal import Decimal
+from urllib.parse import urljoin
 
-import pytz
-from django.utils.timezone import now
-from datetime import timedelta
 from django import forms
-from django.core.files.storage import default_storage
+from django.conf import settings
 from django.template.loader import get_template
 from django.utils import translation
 from django.utils.translation import ugettext, ugettext_lazy as _
-from pretix.base.models import (
-    Event, Item, Order, OrderPosition, Organizer,
-)
-from pretix.base.ticketoutput import BaseTicketOutput
-from pretix.multidomain.urlreverse import build_absolute_uri, eventreverse
-from pretix.base.settings import GlobalSettingsObject
-from django.conf import settings
-
-from google.oauth2 import service_account
 from google.auth import crypt, jwt
 from google.auth.transport.requests import AuthorizedSession
-
-from urllib.parse import urljoin
-
-from walletobjects import eventTicketClass, eventTicketObject, buttonJWT
-from walletobjects.constants import reviewStatus, multipleDevicesAndHoldersAllowedStatus, confirmationCode, doorsOpen, objectState, barcode
+from google.oauth2 import service_account
+from pretix.base.models import OrderPosition
+from pretix.base.settings import GlobalSettingsObject
+from pretix.base.ticketoutput import BaseTicketOutput
+from pretix.multidomain.urlreverse import build_absolute_uri
+from walletobjects import buttonJWT, eventTicketClass, eventTicketObject
+from walletobjects.constants import (
+    barcode, confirmationCode, doorsOpen,
+    multipleDevicesAndHoldersAllowedStatus, objectState, reviewStatus,
+)
 
 from .forms import PNGImageField
+
 
 class WalletobjectOutput(BaseTicketOutput):
     identifier = 'googlepaypasses'
@@ -45,17 +38,17 @@ class WalletobjectOutput(BaseTicketOutput):
             list(super().settings_form_fields.items()) + [
                 ('dataprotection_approval',
                  forms.BooleanField(
-                    label=_('I agree to transmit my participants\' personal data to Google Inc.'),
-                    help_text=_('Please be aware, that contrary to other virtual wallets/passes (like Apple Wallet), '
-                                'Google Pay Passes are not handled offline. Every pass that is created will be '
-                                'transmitted to Google Inc.'
-                                '<br><br>'
-                                'Your participants will be prompted to agree before each transmission, but you might '
-                                'want to add a section concerning this issue to your privacy policy.'
-                                '<br><br>'
-                                'If you require more information or guidance on this subject, please contact your '
-                                'legal counsel.'),
-                    required=True,
+                     label=_('I agree to transmit my participants\' personal data to Google Inc.'),
+                     help_text=_('Please be aware, that contrary to other virtual wallets/passes (like Apple Wallet), '
+                                 'Google Pay Passes are not handled offline. Every pass that is created will be '
+                                 'transmitted to Google Inc.'
+                                 '<br><br>'
+                                 'Your participants will be prompted to agree before each transmission, but you might '
+                                 'want to add a section concerning this issue to your privacy policy.'
+                                 '<br><br>'
+                                 'If you require more information or guidance on this subject, please contact your '
+                                 'legal counsel.'),
+                     required=True,
                  )),
                 ('logo',
                  PNGImageField(
@@ -92,8 +85,8 @@ class WalletobjectOutput(BaseTicketOutput):
 
     def generate(self, order_position: OrderPosition) -> Tuple[str, str, str]:
         order = order_position.order
-        ev = order_position.subevent or order.event
-        tz = pytz.timezone(order.event.settings.get('timezone'))
+        # ev = order_position.subevent or order.event
+        # tz = pytz.timezone(order.event.settings.get('timezone'))
 
         return 'googlepaypass-%s-%s.html' % (self.event.slug, order.code), 'text/html', "Hello World"
 
@@ -165,14 +158,13 @@ class WalletobjectOutput(BaseTicketOutput):
         issuerId = op.order.event.settings.get('googlepaypasses_issuer_id')
 
         return "%s.pretix-%s-%s-%s-%s-%s-%s" % (issuerId, gs.settings.get('update_check_id'),
-                                             op.order.event.organizer.slug, op.order.event.slug,
-                                             op.order.code, op.positionid, uuid.uuid4().hex)
+                                                op.order.event.organizer.slug, op.order.event.slug,
+                                                op.order.code, op.positionid, uuid.uuid4().hex)
 
     def getOrgenerateEventTicketClass(order, authedSession):
         eventTicketClassName = WalletobjectOutput.constructClassID(order)
         result = authedSession.get(
-            'https://www.googleapis.com/walletobjects/v1/eventTicketClass/%s'
-                % (eventTicketClassName)
+            'https://www.googleapis.com/walletobjects/v1/eventTicketClass/%s' % (eventTicketClassName)
         )
 
         if result.status_code == 404:
@@ -207,14 +199,11 @@ class WalletobjectOutput(BaseTicketOutput):
         evTclass = eventTicketClass(
             order.event.organizer.name,
             eventTicketClassName,
-            multipleDevicesAndHoldersAllowedStatus.multipleHolders, # TODO: Make configurable
+            multipleDevicesAndHoldersAllowedStatus.multipleHolders,  # TODO: Make configurable
             order.event.name,
             reviewStatus.underReview,
             order.event.settings.locale
         )
-
-        #evTclass.localizedIssuerName()
-        #evTclass.messages()
 
         evTclass.homepageUri(
             build_absolute_uri(order.event, 'presale:event.index'),
@@ -222,17 +211,12 @@ class WalletobjectOutput(BaseTicketOutput):
             WalletobjectOutput.getTranslatedDict('Website', order.event.settings.get('locales'))
         )
 
-        #evTclass.imageModulesData()
-        #evTclass.linksModuleData()
-
         if (order.event.settings.get('ticketoutput_googlepaypasses_latitude')
-            and order.event.settings.get('ticketoutput_googlepaypasses_longitude')):
+           and order.event.settings.get('ticketoutput_googlepaypasses_longitude')):
                 evTclass.locations(
                     order.event.settings.get('ticketoutput_googlepaypasses_latitude'),
                     order.event.settings.get('ticketoutput_googlepaypasses_longitude')
                 )
-
-        #evTclass.textModulesData()
 
         evTclass.countryCode(order.event.settings.get('locale'))
 
@@ -240,7 +224,7 @@ class WalletobjectOutput(BaseTicketOutput):
 
         if order.event.settings.get('ticketoutput_googlepaypasses_hero'):
             evTclass.heroImage(
-                #urljoin(settings.SITE_URL, order.event.settings.get('ticketoutput_googlepaypasses_hero').url),
+                # urljoin(settings.SITE_URL, order.event.settings.get('ticketoutput_googlepaypasses_hero').url),
                 'https://us.pc-coholic.de/pretix-hero.jpg',
                 str(order.event.name),
                 order.event.name,
@@ -251,7 +235,7 @@ class WalletobjectOutput(BaseTicketOutput):
 
         if order.event.settings.get('ticketoutput_googlepaypasses_logo'):
             evTclass.logo(
-                #urljoin(settings.SITE_URL, order.event.settings.get('ticketoutput_googlepaypasses_logo').url),
+                # urljoin(settings.SITE_URL, order.event.settings.get('ticketoutput_googlepaypasses_logo').url),
                 'https://us.pc-coholic.de/pretix-logo.png',
                 str(order.event.name),
                 order.event.name,
@@ -275,24 +259,17 @@ class WalletobjectOutput(BaseTicketOutput):
                 order.event.date_to.isoformat(),
             )
 
-        #evTclass.finePrint()
-
         evTclass.confirmationCodeLabel(confirmationCode.orderNumber)
-
-        #evTclass.seatLabel()
-        #evTclass.rowLabel()
-        #evTclass.sectionLabel()
-        #evTclass.gateLabel()
 
         if update:
             result = authedSession.put(
                 'https://www.googleapis.com/walletobjects/v1/eventTicketClass/%s?strict=true' % WalletobjectOutput.constructClassID(order),
-                json = json.loads(str(evTclass))
+                json=json.loads(str(evTclass))
             )
         else:
             result = authedSession.post(
                 'https://www.googleapis.com/walletobjects/v1/eventTicketClass?strict=true',
-                json = json.loads(str(evTclass))
+                json=json.loads(str(evTclass))
             )
 
         if result.status_code == 200:
@@ -316,23 +293,15 @@ class WalletobjectOutput(BaseTicketOutput):
 
         evTobject.barcode(barcode.qrCode, op.secret)
 
-        #evTobject.messages()
-        #evTobject.validTimeInterval()
-        #evTobject.locations()
-        #evTobject.disableExpirationNotification()
-        #evTobject.infoModuleData()
-        #evTobject.imageModulesData()
-        #evTobject.textModulesData()
-        #evTobject.linksModuleData()
-        #evTobject.seat()
-        #evTobject.row()
-        #evTobject.section()
-        #evTobject.gate()
-
         evTobject.reservationInfo("%s-%s" % (op.order.event.slug, op.order.code))
         evTobject.ticketHolderName(op.attendee_name or (op.addon_to.attendee_name if op.addon_to else ''))
         evTobject.ticketNumber(op.secret)
-        evTobject.ticketType(WalletobjectOutput.getTranslatedDict(str(op.item) + (" – " + str(op.variation.value) if op.variation else ""), op.order.event.settings.get('locales')))
+        evTobject.ticketType(
+            WalletobjectOutput.getTranslatedDict(
+                str(op.item) + (" – " + str(op.variation.value) if op.variation else ""),
+                op.order.event.settings.get('locales')
+            )
+        )
 
         places = settings.CURRENCY_PLACES.get(op.order.event.currency, 2)
         evTobject.faceValue(int(op.price * 1000 ** places), op.order.event.currency)
@@ -341,12 +310,12 @@ class WalletobjectOutput(BaseTicketOutput):
             if update:
                 result = authedSession.put(
                     'https://www.googleapis.com/walletobjects/v1/eventTicketObject/%s?strict=true' % evTobjectID,
-                    json = json.loads(str(evTobject))
+                    json=json.loads(str(evTobject))
                 )
             else:
                 result = authedSession.post(
                     'https://www.googleapis.com/walletobjects/v1/eventTicketObject?strict=true',
-                    json = json.loads(str(evTobject))
+                    json=json.loads(str(evTobject))
                 )
 
             if result.status_code == 200:
@@ -365,7 +334,7 @@ class WalletobjectOutput(BaseTicketOutput):
         button = buttonJWT(
             origins=[settings.SITE_URL],
             issuer=credentials['client_email'],
-            eventTicketObjects = [json.loads(str(payload))],
+            eventTicketObjects=[json.loads(str(payload))],
         )
         signer = crypt.RSASigner.from_service_account_info(credentials)
         payload = json.loads(str(button))
@@ -388,7 +357,7 @@ class WalletobjectOutput(BaseTicketOutput):
 
         result = authedSession.put(
             'https://www.googleapis.com/walletobjects/v1/eventTicketObject/%s?strict=true' % evTobjectID,
-            json = json.loads(str(evTobject))
+            json=json.loads(str(evTobject))
         )
 
         if result.status_code == 200:

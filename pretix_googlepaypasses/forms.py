@@ -1,14 +1,13 @@
-import logging
-import subprocess
-import tempfile
 import json
+import logging
+import tempfile
 
 from django import forms
 from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile, UploadedFile
 from django.utils.translation import ugettext_lazy as _
-from pretix.control.forms import ClearableBasenameFileInput
 from google.oauth2 import service_account
+from pretix.control.forms import ClearableBasenameFileInput
 
 logger = logging.getLogger(__name__)
 
@@ -16,7 +15,7 @@ logger = logging.getLogger(__name__)
 def validate_json_credentials(value: str):
     value = value.strip()
     try:
-        credentials = service_account.Credentials.from_service_account_info(
+        service_account.Credentials.from_service_account_info(
             json.loads(value),
             scopes=['https://www.googleapis.com/auth/wallet_object.issuer'],
         )
@@ -25,6 +24,7 @@ def validate_json_credentials(value: str):
             _('It seems like the credentials-file is not correct. '
               'Please make sure that you pasted the entire contents of the file.'),
         )
+
 
 class PNGImageField(forms.FileField):
     widget = ClearableBasenameFileInput
