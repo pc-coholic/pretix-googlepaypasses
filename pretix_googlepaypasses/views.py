@@ -38,7 +38,8 @@ class GenerateWalletObject(OrderDetailMixin, View):
                     'status': 'error',
                 })
 
-            return HttpResponseRedirect('https://www.android.com/payapp/savetoandroidpay/%s' % JWT)
+            #return HttpResponseRedirect('https://www.android.com/payapp/savetoandroidpay/%s' % JWT)
+            return HttpResponseRedirect('https://pay.google.com/gp/v/a/save/%s' % JWT)
         else:
             return JsonResponse({
                 'status': 'error',
