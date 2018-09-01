@@ -63,4 +63,4 @@ class Command(BaseCommand):
                 else:
                     print('Successfully shredded object %s' % (options['param']))
         else:
-            print('Unknown action. Use either \'list <classID>\', \'print <objectID>\' or \'shred <objectID>\')
+            print('Unknown action. Use either \'list <classID>\', \'print <objectID>\' or \'shred <objectID>\'')
