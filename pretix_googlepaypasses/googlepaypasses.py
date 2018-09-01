@@ -5,7 +5,7 @@ from typing import Tuple
 from urllib.parse import urljoin
 
 from django import forms
-from django.conf import settings
+from django.conf import settings as django_settings
 from django.template.loader import get_template
 from django.utils import translation
 from django.utils.translation import ugettext, ugettext_lazy as _
@@ -21,7 +21,7 @@ from walletobjects.constants import (
     barcode, confirmationCode, doorsOpen,
     multipleDevicesAndHoldersAllowedStatus, objectState, reviewStatus,
 )
-
+from inlinestyler.utils import inline_css
 from .forms import PNGImageField
 
 
@@ -85,10 +85,20 @@ class WalletobjectOutput(BaseTicketOutput):
 
     def generate(self, order_position: OrderPosition) -> Tuple[str, str, str]:
         order = order_position.order
-        # ev = order_position.subevent or order.event
+        ev = order_position.subevent or order.event
         # tz = pytz.timezone(order.event.settings.get('timezone'))
 
-        return 'googlepaypass-%s-%s.html' % (self.event.slug, order.code), 'text/html', "Hello World"
+        ctx = {
+            'color': ev.settings.get('primary_color'),
+            'event': ev,
+            'order': order,
+            'position': order_position,
+            'site_url':  django_settings.SITE_URL
+        }
+        tpl_html = get_template('pretix_googlepaypasses/email/notification.html')
+        body_html = inline_css(tpl_html.render(ctx))
+
+        return 'googlepaypass-%s-%s.html' % (ev.slug, order.code), 'text/html', body_html
 
     def settings_content_render(self, request) -> str:
         if self.event.settings.get('passbook_gmaps_api_key') and self.event.location:
@@ -189,7 +199,7 @@ class WalletobjectOutput(BaseTicketOutput):
         meta_info = json.loads(op.meta_info or '{}')
 
         if 'googlepaypass' in meta_info:
-            eventTicketObject = WalletobjectOutput.generateEventTicketObject(op, authedSession, ship=False)
+            eventTicketObject = WalletobjectOutput.generateEventTicketObject(op, authedSession, update=True, ship=False)
         else:
             eventTicketObject = WalletobjectOutput.generateEventTicketObject(op, authedSession)
 
@@ -245,7 +255,7 @@ class WalletobjectOutput(BaseTicketOutput):
 
         if event.settings.get('ticketoutput_googlepaypasses_hero'):
             evTclass.heroImage(
-                # urljoin(settings.SITE_URL, order.event.settings.get('ticketoutput_googlepaypasses_hero').url),
+                # urljoin(django_settings.SITE_URL, order.event.settings.get('ticketoutput_googlepaypasses_hero').url),
                 'https://us.pc-coholic.de/pretix-hero.jpg',
                 str(event.name),
                 event.name,
@@ -256,7 +266,7 @@ class WalletobjectOutput(BaseTicketOutput):
 
         if event.settings.get('ticketoutput_googlepaypasses_logo'):
             evTclass.logo(
-                # urljoin(settings.SITE_URL, event.settings.get('ticketoutput_googlepaypasses_logo').url),
+                # urljoin(django_settings.SITE_URL, event.settings.get('ticketoutput_googlepaypasses_logo').url),
                 'https://us.pc-coholic.de/pretix-logo.png',
                 str(event.name),
                 event.name,
@@ -328,7 +338,7 @@ class WalletobjectOutput(BaseTicketOutput):
             )
         )
 
-        places = settings.CURRENCY_PLACES.get(op.order.event.currency, 2)
+        places = django_settings.CURRENCY_PLACES.get(op.order.event.currency, 2)
         evTobject.faceValue(int(op.price * 1000 ** places), op.order.event.currency)
 
         if ship:
@@ -361,7 +371,7 @@ class WalletobjectOutput(BaseTicketOutput):
         credentials = json.loads(settings.get('googlepaypasses_credentials'))
 
         button = buttonJWT(
-            origins=[settings.SITE_URL],
+            origins=[django_settings.SITE_URL],
             issuer=credentials['client_email'],
             eventTicketObjects=[json.loads(str(payload))],
         )

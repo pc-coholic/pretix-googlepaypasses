@@ -1,0 +1,35 @@
+{% extends "pretix_googlepaypasses/email/base.html" %}
+{% load i18n %}
+{% load eventurl %}
+{% load staticfiles %}
+{% load static %}
+
+{% block content %}
+    <tr>
+        <td class="containertd">
+            <div class="content">
+                <h3>{% trans "Privacy notice" %}</h3>
+                <p>
+                    {% blocktrans trimmed %}
+                    Please be aware, that contrary to other virtual wallets/passes (like Apple Wallet),
+                    Google Pay Passes are not handled offline. Every pass that is created, has to be
+                    transmitted to Google Inc.
+                    <br><br>
+                    By clicking the "Save to phone"-button below, we will transfer some of your personal
+                    information, which is necessary to provide you with your Google Pay Pass, to Google Inc.
+                    <br><br>
+                    Please be aware, that there is no way to delete the data, once it has been transmitted.
+                    <br><br>
+                    However we will anonymize all passes that are not linked to a device on a regular,
+                    best effort basis. While this will remove your personal information from the pass, we
+                    cannot guarantee that Google is not keeping a history of the previous passes.
+                    {% endblocktrans %}
+                </p>
+                <a href="{{ site_url }}{% eventurl event "presale:event.order.download" secret=order.secret order=order.code output="googlepaypasses" position=position.id %}/generate">
+                  <img src="{{ site_url }}{% static "pretix_googlepaypasses/SavetoGooglePay-English-Dark.svg" %}" />
+                </a>
+            </div>
+        </td>
+    </tr>
+
+{% endblock %}
