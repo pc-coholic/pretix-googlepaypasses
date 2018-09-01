@@ -1,0 +1,15 @@
+{% load i18n %}
+
+<p>
+    {% blocktrans trimmed %}
+        A problem has occured when creating or updating the Google Pay Passes <code>eventticketobject</code>.
+    {% endblocktrans %}
+    {% if '/requiredactions/' in request.path %}
+      <br><br>
+      {% blocktrans trimmed with status_code=data.status_code text=data.text object=data.object %}
+          Return code: <code>{{ status_code }}</code><br>
+          Transmitted object: <pre><code>{{ object }}</code></pre><br>
+          Returned data: <pre><code>{{ text }}</code></pre>
+      {% endblocktrans %}
+    {% endif %}
+</p>

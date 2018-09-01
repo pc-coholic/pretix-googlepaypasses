@@ -38,6 +38,6 @@ setup(
     cmdclass=cmdclass,
     entry_points="""
 [pretix.plugin]
-passbook=pretix_googlepaypasses:PretixPluginMeta
+pretix_googlepaypasses=pretix_googlepaypasses:PretixPluginMeta
 """,
 )

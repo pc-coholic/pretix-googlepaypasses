@@ -12,7 +12,7 @@ from django.utils.translation import ugettext, ugettext_lazy as _
 from google.auth import crypt, jwt
 from google.auth.transport.requests import AuthorizedSession
 from google.oauth2 import service_account
-from pretix.base.models import OrderPosition
+from pretix.base.models import RequiredAction, OrderPosition
 from pretix.base.settings import GlobalSettingsObject
 from pretix.base.ticketoutput import BaseTicketOutput
 from pretix.multidomain.urlreverse import build_absolute_uri
@@ -286,9 +286,13 @@ class WalletobjectOutput(BaseTicketOutput):
         if result.status_code == 200:
             return eventTicketClassName
         else:
-            # TODO: Perhaps log the error?
-            print(result.status_code)
-            print(result.text)
+            RequiredAction.objects.get_or_create(
+                event=event, action_type='pretix_googlepaypasses.evenTicketClassFail', data=json.dumps({
+                    'status_code': result.status_code,
+                    'text': result.text,
+                    'class': str(evTclass)
+                })
+            )
             return False
 
     def generateEventTicketObject(op, authedSession, update=False, ship=True):
@@ -332,9 +336,13 @@ class WalletobjectOutput(BaseTicketOutput):
             if result.status_code == 200:
                 return evTobject
             else:
-                # TODO: Perhaps log the error?
-                print(result.status_code)
-                print(result.text)
+                RequiredAction.objects.get_or_create(
+                    event=op.order.event, action_type='pretix_googlepaypasses.evenTicketObjectFail', data=json.dumps({
+                        'status_code': result.status_code,
+                        'text': result.text,
+                        'object': str(evTobject)
+                    })
+                )
                 return False
         else:
             return evTobject

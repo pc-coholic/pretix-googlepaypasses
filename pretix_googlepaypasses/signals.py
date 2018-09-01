@@ -9,7 +9,7 @@ from django.urls import resolve
 from django.utils.translation import ugettext_lazy as _
 from pretix.base.models import Event, LogEntry, OrderPosition
 from pretix.base.signals import (
-    register_global_settings, register_ticket_outputs,
+    register_global_settings, register_ticket_outputs, requiredaction_display
 )
 from pretix.presale.signals import html_head as html_head_presale
 from pretix_googlepaypasses.googlepaypasses import WalletobjectOutput
@@ -89,3 +89,18 @@ def logentry_post_save(sender, instance, **kwargs):
             authedSession = WalletobjectOutput.getAuthedSession(event.settings)
             if WalletobjectOutput.checkIfEventTicketClassExists(event, authedSession):
                 WalletobjectOutput.generateEventTicketClass(event, authedSession, update=True)
+
+@receiver(signal=requiredaction_display, dispatch_uid="googlepaypasses_requiredaction_display")
+def pretixcontrol_action_display(sender, action, request, **kwargs):
+    if not action.action_type.startswith('pretix_googlepaypasses'):
+        return
+
+    data = json.loads(action.data)
+
+    if action.action_type == 'pretix_googlepaypasses.evenTicketClassFail':
+        template = get_template('pretix_googlepaypasses/action_evenTicketClassFail.html')
+    elif action.action_type == 'pretix_googlepaypasses.evenTicketObjectFail':
+        template = get_template('pretix_googlepaypasses/action_evenTicketObjectFail.html')
+
+    ctx = {'data': data, 'event': sender, 'action': action}
+    return template.render(ctx, request)
