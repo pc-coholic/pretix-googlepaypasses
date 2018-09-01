@@ -77,8 +77,8 @@ def logentry_post_save(sender, instance, **kwargs):
             for op in ops:
                 WalletobjectOutput.shredEventTicketObject(op, WalletobjectOutput.getAuthedSession(op.order.event.settings))
     elif instance.action_type in ['pretix.event.tickets.provider.googlepaypasses', 'pretix.event.changed', 'pretix.event.settings']:
-        authedSession = WalletobjectOutput.getAuthedSession(event.settings)
         event = Event.objects.get(id=instance.event_id)
+        authedSession = WalletobjectOutput.getAuthedSession(event.settings)
 
         if WalletobjectOutput.checkIfEventTicketClassExists(event, authedSession):
             WalletobjectOutput.generateEventTicketClass(event, authedSession, update=True)

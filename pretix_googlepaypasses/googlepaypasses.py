@@ -283,7 +283,6 @@ class WalletobjectOutput(BaseTicketOutput):
                 json=json.loads(str(evTclass))
             )
 
-        print(result.text)
         if result.status_code == 200:
             return eventTicketClassName
         else:
