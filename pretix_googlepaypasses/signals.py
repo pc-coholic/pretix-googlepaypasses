@@ -7,7 +7,7 @@ from django.dispatch import receiver
 from django.template.loader import get_template
 from django.urls import resolve
 from django.utils.translation import ugettext_lazy as _
-from pretix.base.models import LogEntry, OrderPosition
+from pretix.base.models import Event, LogEntry, OrderPosition
 from pretix.base.signals import (
     register_global_settings, register_ticket_outputs,
 )
@@ -76,3 +76,16 @@ def logentry_post_save(sender, instance, **kwargs):
             ops = OrderPosition.objects.filter(order=instance.object_id)
             for op in ops:
                 WalletobjectOutput.shredEventTicketObject(op, WalletobjectOutput.getAuthedSession(op.order.event.settings))
+    elif instance.action_type in ['pretix.event.tickets.provider.googlepaypasses', 'pretix.event.changed', 'pretix.event.settings']:
+        authedSession = WalletobjectOutput.getAuthedSession(event.settings)
+        event = Event.objects.get(id=instance.event_id)
+
+        if WalletobjectOutput.checkIfEventTicketClassExists(event, authedSession):
+            WalletobjectOutput.generateEventTicketClass(event, authedSession, update=True)
+    elif instance.action_type in ['pretix.organizer.settings']:
+        events = Event.objects.filter(organizer_id=instance.object_id, plugins__contains='pretix_googlepaypasses')
+
+        for event in events:
+            authedSession = WalletobjectOutput.getAuthedSession(event.settings)
+            if WalletobjectOutput.checkIfEventTicketClassExists(event, authedSession):
+                WalletobjectOutput.generateEventTicketClass(event, authedSession, update=True)

@@ -32,7 +32,7 @@ setup(
     author='Martin Gross',
     author_email='martin@pc-coholic.de',
 
-    install_requires=['google-auth'],
+    install_requires=['google-auth', 'googlemaps'],
     packages=find_packages(exclude=['tests', 'tests.*']),
     include_package_data=True,
     cmdclass=cmdclass,

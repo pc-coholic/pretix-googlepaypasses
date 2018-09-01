@@ -106,7 +106,7 @@ class WalletobjectOutput(BaseTicketOutput):
         if not authedSession:
             return False
 
-        eventTicketClass = WalletobjectOutput.getOrgenerateEventTicketClass(order, authedSession)
+        eventTicketClass = WalletobjectOutput.getOrgenerateEventTicketClass(order.event, authedSession)
 
         if not eventTicketClass:
             return False
@@ -140,15 +140,15 @@ class WalletobjectOutput(BaseTicketOutput):
         except:
             return False
 
-    def constructClassID(order):
+    def constructClassID(event):
         gs = GlobalSettingsObject()
         if not gs.settings.get('update_check_id'):
             gs.settings.set('update_check_id', uuid.uuid4().hex)
 
-        issuerId = order.event.settings.get('googlepaypasses_issuer_id')
+        issuerId = event.settings.get('googlepaypasses_issuer_id')
 
         return "%s.pretix-%s-%s-%s" % (issuerId, gs.settings.get('update_check_id'),
-                                       order.event.organizer.slug, order.event.slug)
+                                       event.organizer.slug, event.slug)
 
     def constructObjectID(op):
         gs = GlobalSettingsObject()
@@ -161,15 +161,26 @@ class WalletobjectOutput(BaseTicketOutput):
                                                 op.order.event.organizer.slug, op.order.event.slug,
                                                 op.order.code, op.positionid, uuid.uuid4().hex)
 
-    def getOrgenerateEventTicketClass(order, authedSession):
-        eventTicketClassName = WalletobjectOutput.constructClassID(order)
+    def getOrgenerateEventTicketClass(event, authedSession):
+        eventTicketClassName = WalletobjectOutput.constructClassID(event)
         result = authedSession.get(
             'https://www.googleapis.com/walletobjects/v1/eventTicketClass/%s' % (eventTicketClassName)
         )
 
         if result.status_code == 404:
-            return WalletobjectOutput.generateEventTicketClass(order, authedSession)
+            return WalletobjectOutput.generateEventTicketClass(event, authedSession)
         elif result.status_code == 200:
+            return eventTicketClassName
+        else:
+            return False
+
+    def checkIfEventTicketClassExists(event, authedSession):
+        eventTicketClassName = WalletobjectOutput.constructClassID(event)
+        result = authedSession.get(
+            'https://www.googleapis.com/walletobjects/v1/eventTicketClass/%s' % (eventTicketClassName)
+        )
+
+        if result.status_code == 200:
             return eventTicketClassName
         else:
             return False
@@ -192,78 +203,78 @@ class WalletobjectOutput(BaseTicketOutput):
         else:
             return False
 
-    def generateEventTicketClass(order, authedSession, update=False):
+    def generateEventTicketClass(event, authedSession, update=False):
         gs = GlobalSettingsObject()
-        eventTicketClassName = WalletobjectOutput.constructClassID(order)
+        eventTicketClassName = WalletobjectOutput.constructClassID(event)
 
         evTclass = eventTicketClass(
-            order.event.organizer.name,
+            event.organizer.name,
             eventTicketClassName,
             multipleDevicesAndHoldersAllowedStatus.multipleHolders,  # TODO: Make configurable
-            order.event.name,
+            event.name,
             reviewStatus.underReview,
-            order.event.settings.locale
+            event.settings.locale
         )
 
         evTclass.homepageUri(
-            build_absolute_uri(order.event, 'presale:event.index'),
-            WalletobjectOutput.getTranslatedString('Website', order.event.settings.get('locale')),
-            WalletobjectOutput.getTranslatedDict('Website', order.event.settings.get('locales'))
+            build_absolute_uri(event, 'presale:event.index'),
+            WalletobjectOutput.getTranslatedString('Website', event.settings.get('locale')),
+            WalletobjectOutput.getTranslatedDict('Website', event.settings.get('locales'))
         )
 
-        if (order.event.settings.get('ticketoutput_googlepaypasses_latitude')
-           and order.event.settings.get('ticketoutput_googlepaypasses_longitude')):
+        if (event.settings.get('ticketoutput_googlepaypasses_latitude')
+           and event.settings.get('ticketoutput_googlepaypasses_longitude')):
                 evTclass.locations(
-                    order.event.settings.get('ticketoutput_googlepaypasses_latitude'),
-                    order.event.settings.get('ticketoutput_googlepaypasses_longitude')
+                    event.settings.get('ticketoutput_googlepaypasses_latitude'),
+                    event.settings.get('ticketoutput_googlepaypasses_longitude')
                 )
 
-        evTclass.countryCode(order.event.settings.get('locale'))
+        evTclass.countryCode(event.settings.get('locale'))
 
         evTclass.hideBarcode(False)
 
-        if order.event.settings.get('ticketoutput_googlepaypasses_hero'):
+        if event.settings.get('ticketoutput_googlepaypasses_hero'):
             evTclass.heroImage(
                 # urljoin(settings.SITE_URL, order.event.settings.get('ticketoutput_googlepaypasses_hero').url),
                 'https://us.pc-coholic.de/pretix-hero.jpg',
-                str(order.event.name),
-                order.event.name,
+                str(event.name),
+                event.name,
             )
 
-        evTclass.hexBackgroundColor(order.event.settings.get('primary_color'))
-        evTclass.eventId('pretix-%s-%s-%s' % (gs.settings.get('update_check_id'), order.event.organizer.slug, order.event.slug))
+        evTclass.hexBackgroundColor(event.settings.get('primary_color'))
+        evTclass.eventId('pretix-%s-%s-%s' % (gs.settings.get('update_check_id'), event.organizer.slug, event.slug))
 
-        if order.event.settings.get('ticketoutput_googlepaypasses_logo'):
+        if event.settings.get('ticketoutput_googlepaypasses_logo'):
             evTclass.logo(
-                # urljoin(settings.SITE_URL, order.event.settings.get('ticketoutput_googlepaypasses_logo').url),
+                # urljoin(settings.SITE_URL, event.settings.get('ticketoutput_googlepaypasses_logo').url),
                 'https://us.pc-coholic.de/pretix-logo.png',
-                str(order.event.name),
-                order.event.name,
+                str(event.name),
+                event.name,
             )
 
-        if order.event.location:
+        if event.location:
             name = {}
             address = {}
 
-            for key, value in order.event.location.data.items():
+            for key, value in event.location.data.items():
                 name[key] = value.splitlines()[0]
                 address[key] = value.splitlines()[1]
 
             evTclass.venue(name, address)
 
-        if order.event.date_from and order.event.date_to and order.event.date_admission:
+        if event.date_from and event.date_to and event.date_admission:
             evTclass.dateTime(
                 doorsOpen.doorsOpen,
-                order.event.date_admission.isoformat(),
-                order.event.date_from.isoformat(),
-                order.event.date_to.isoformat(),
+                event.date_admission.isoformat(),
+                event.date_from.isoformat(),
+                event.date_to.isoformat(),
             )
 
         evTclass.confirmationCodeLabel(confirmationCode.orderNumber)
 
         if update:
             result = authedSession.put(
-                'https://www.googleapis.com/walletobjects/v1/eventTicketClass/%s?strict=true' % WalletobjectOutput.constructClassID(order),
+                'https://www.googleapis.com/walletobjects/v1/eventTicketClass/%s?strict=true' % WalletobjectOutput.constructClassID(event),
                 json=json.loads(str(evTclass))
             )
         else:
@@ -272,6 +283,7 @@ class WalletobjectOutput(BaseTicketOutput):
                 json=json.loads(str(evTclass))
             )
 
+        print(result.text)
         if result.status_code == 200:
             return eventTicketClassName
         else:
@@ -281,7 +293,7 @@ class WalletobjectOutput(BaseTicketOutput):
             return False
 
     def generateEventTicketObject(op, authedSession, update=False, ship=True):
-        eventTicketClassName = WalletobjectOutput.constructClassID(op.order)
+        eventTicketClassName = WalletobjectOutput.constructClassID(op.order.event)
         meta_info = json.loads(op.meta_info or '{}')
 
         if update:
@@ -352,7 +364,7 @@ class WalletobjectOutput(BaseTicketOutput):
             return True
 
         evTobjectID = meta_info['googlepaypass']
-        eventTicketClassName = WalletobjectOutput.constructClassID(op.order)
+        eventTicketClassName = WalletobjectOutput.constructClassID(op.order.event)
         evTobject = eventTicketObject(evTobjectID, eventTicketClassName, objectState.inactive, op.order.event.settings.locale)
 
         result = authedSession.put(
