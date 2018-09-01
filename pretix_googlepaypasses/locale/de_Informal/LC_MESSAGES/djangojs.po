@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2018-09-01 19:01+0200\n"
+"POT-Creation-Date: 2018-09-01 19:12+0200\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -16,18 +16,17 @@ msgstr ""
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
-#: static/pretix_googlepaypasses/geosuggest.js:4
+#: pretix_googlepaypasses/static/pretix_googlepaypasses/geosuggest.js:4
 msgid "Loading suggested geolocations…"
 msgstr ""
 
-#: static/pretix_googlepaypasses/geosuggest.js:13
+#: pretix_googlepaypasses/static/pretix_googlepaypasses/geosuggest.js:13
 msgid ""
 "Click on one of the following suggestions to fill in the coordinates "
 "automatically:"
 msgstr ""
 
-#: static/pretix_googlepaypasses/geosuggest.js:35
+#: pretix_googlepaypasses/static/pretix_googlepaypasses/geosuggest.js:35
 msgid "Error while loading suggested geolocations."
 msgstr ""
