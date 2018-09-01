@@ -4,6 +4,9 @@ pretix-googlepaypasses
 .. image:: https://img.shields.io/pypi/v/pretix-googlepaypasses.svg
    :target: https://pypi.python.org/pypi/pretix-googlepaypasses
 
+.. image:: https://img.shields.io/badge/translations-POEditor.com-blue.svg
+   :target: https://poeditor.com/join/project/56JsXIFCaC
+
 This is a plugin for `pretix`_. It allows to provide tickets in the Walletobjects-format, that can be added to Google
 Pay.
 
