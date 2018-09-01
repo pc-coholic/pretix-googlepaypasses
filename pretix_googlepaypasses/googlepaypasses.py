@@ -12,7 +12,7 @@ from django.utils.translation import ugettext, ugettext_lazy as _
 from google.auth import crypt, jwt
 from google.auth.transport.requests import AuthorizedSession
 from google.oauth2 import service_account
-from pretix.base.models import RequiredAction, OrderPosition
+from pretix.base.models import OrderPosition, RequiredAction
 from pretix.base.settings import GlobalSettingsObject
 from pretix.base.ticketoutput import BaseTicketOutput
 from pretix.multidomain.urlreverse import build_absolute_uri
@@ -203,6 +203,16 @@ class WalletobjectOutput(BaseTicketOutput):
         else:
             return False
 
+    def getEventTicketObjectFromServer(objectID, authedSession):
+        result = authedSession.get(
+            'https://www.googleapis.com/walletobjects/v1/eventTicketObject/%s' % (objectID)
+        )
+
+        if result.status_code == 200:
+            return json.loads(result.text)
+        else:
+            return False
+
     def generateEventTicketClass(event, authedSession, update=False):
         gs = GlobalSettingsObject()
         eventTicketClassName = WalletobjectOutput.constructClassID(event)
@@ -384,7 +394,6 @@ class WalletobjectOutput(BaseTicketOutput):
             meta_info.pop('googlepaypass')
             op.meta_info = json.dumps(meta_info)
             op.save(update_fields=['meta_info'])
-
             return True
         else:
             print(result.status_code)

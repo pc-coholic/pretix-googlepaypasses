@@ -9,7 +9,8 @@ from django.urls import resolve
 from django.utils.translation import ugettext_lazy as _
 from pretix.base.models import Event, LogEntry, OrderPosition
 from pretix.base.signals import (
-    register_global_settings, register_ticket_outputs, requiredaction_display
+    periodic_task, register_global_settings, register_ticket_outputs,
+    requiredaction_display,
 )
 from pretix.presale.signals import html_head as html_head_presale
 from pretix_googlepaypasses.googlepaypasses import WalletobjectOutput
@@ -90,6 +91,7 @@ def logentry_post_save(sender, instance, **kwargs):
             if WalletobjectOutput.checkIfEventTicketClassExists(event, authedSession):
                 WalletobjectOutput.generateEventTicketClass(event, authedSession, update=True)
 
+
 @receiver(signal=requiredaction_display, dispatch_uid="googlepaypasses_requiredaction_display")
 def pretixcontrol_action_display(sender, action, request, **kwargs):
     if not action.action_type.startswith('pretix_googlepaypasses'):
@@ -104,3 +106,27 @@ def pretixcontrol_action_display(sender, action, request, **kwargs):
 
     ctx = {'data': data, 'event': sender, 'action': action}
     return template.render(ctx, request)
+
+
+@receiver(signal=periodic_task)
+def shred_unused_objects(sender, **kwargs):
+    # Oh well...
+    # Google does supposedly report if a WalletObject has any users...
+    #
+    # hasUsers - boolean - Indicates if the object has users. This field is set by the platform
+    #
+    # Guess, what, it doesn't work and reports "hasUsers -> False" even when the object is installed.
+    # Perhaps this is just a timing issue (Result is cached on the Google-side?) - but for now we cannot
+    # offer automatic shredding of unused passes. Sucks :-(
+    return
+
+    ops = OrderPosition.objects.filter(meta_info__contains='"googlepaypass"')
+    for op in ops:
+        authedSession = WalletobjectOutput.getAuthedSession(op.order.event.settings)
+        meta_info = json.loads(op.meta_info or '{}')
+        evTobjectID = meta_info['googlepaypass']
+
+        evTobject = WalletobjectOutput.getEventTicketObjectFromServer(evTobjectID, authedSession)
+
+        if not evTobject['hasUsers']:
+            WalletobjectOutput.shredEventTicketObject(op, authedSession)
