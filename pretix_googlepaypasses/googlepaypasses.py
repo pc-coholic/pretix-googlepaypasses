@@ -95,7 +95,7 @@ class WalletobjectOutput(BaseTicketOutput):
             'position': order_position,
             'site_url':  django_settings.SITE_URL
         }
-        tpl_html = get_template('pretix_googlepaypasses/email/notification.html')
+        tpl_html = get_template('pretix_googlepaypasses/downloadfallback.html')
         body_html = inline_css(tpl_html.render(ctx))
 
         return 'googlepaypass-%s-%s.html' % (ev.slug, order.code), 'text/html', body_html
