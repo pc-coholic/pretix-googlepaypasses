@@ -7,9 +7,9 @@ $(function() {
     $(this).css('z-index', 1060);
   });
 
-  $('a[href*="googlepaypasses"]').click(function(event) {
+  $('form[action*="googlepaypasses"]').click(function(event) {
     event.preventDefault();
-    $('#googlepaypassesmodal .btn-primary').attr('href', $(this).attr('href') + '/generate');
+    $('#googlepaypassesmodal .btn-primary').attr('href', $(this).attr('action') + '/generate');
     $('#googlepaypassesmodal').modal('toggle');
     return false;
   });
