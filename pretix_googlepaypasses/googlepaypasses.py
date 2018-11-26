@@ -153,7 +153,7 @@ class WalletobjectOutput(BaseTicketOutput):
             authedSession = AuthorizedSession(credentials)
             return authedSession
         except:
-            return False
+            raise Exception('Could not get authedSession. Did you properly setup the necessary credentials?')
 
     def constructClassID(event):
         gs = GlobalSettingsObject()
