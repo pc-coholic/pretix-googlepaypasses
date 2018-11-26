@@ -56,6 +56,9 @@ class WalletobjectOutput(BaseTicketOutput):
                      help_text=_('<a href="https://developers.google.com/pay/passes/guides/pass-verticals/event-tickets/design">#1</a> '
                                  '- Minimum size is 660 x 660 pixels. We suggest an upload size of 1200 x 1200 pixels.'
                                  '<br><br>'
+                                 'Google will verify that the image you are specifying here is reachable from the internetself.'
+                                 'If it is not, the passes cannot be generated and the API will return an error.'
+                                 '<br><br>'
                                  'Please see <a href="https://developers.google.com/pay/passes/guides/get-started/api-guidelines/brand-guidelines#logo-image-guidelines">'
                                  'Google Pay API for Passes Brand guidelines</a> for more detailed information.'),
                      required=False,
@@ -65,6 +68,9 @@ class WalletobjectOutput(BaseTicketOutput):
                      label=_('Hero image'),
                      help_text=_('<a href="https://developers.google.com/pay/passes/guides/pass-verticals/event-tickets/design">#6</a> '
                                  '- Minimum aspect ratio is 3:1, or wider. We suggest an upload size of 1032 x 336 pixels.'
+                                 '<br><br>'
+                                 'Google will verify that the image you are specifying here is reachable from the internetself.'
+                                 'If it is not, the passes cannot be generated and the API will return an error.'
                                  '<br><br>'
                                  'Please see <a href="https://developers.google.com/pay/passes/guides/get-started/api-guidelines/brand-guidelines#hero-image-guidelines">'
                                  'Google Pay API for Passes Brand guidelines</a> for more detailed information.'),
