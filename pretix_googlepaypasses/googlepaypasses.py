@@ -267,7 +267,7 @@ class WalletobjectOutput(BaseTicketOutput):
             )
 
         evTclass.hexBackgroundColor(event.settings.get('primary_color'))
-        evTclass.eventId('pretix-%s-%s-%s' % (gs.settings.get('update_check_id'), event.organizer.slug, event.slug))
+        evTclass.eventId('pretix-%s-%s-%s' % (gs.settings.get('update_check_id'), event.organizer.id, event.id))
 
         if event.settings.get('ticketoutput_googlepaypasses_logo'):
             evTclass.logo(
