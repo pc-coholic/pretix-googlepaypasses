@@ -260,8 +260,7 @@ class WalletobjectOutput(BaseTicketOutput):
 
         if event.settings.get('ticketoutput_googlepaypasses_hero'):
             evTclass.heroImage(
-                # urljoin(django_settings.SITE_URL, order.event.settings.get('ticketoutput_googlepaypasses_hero').url),
-                'https://us.pc-coholic.de/pretix-hero.jpg',
+                urljoin(django_settings.SITE_URL, event.settings.get('ticketoutput_googlepaypasses_hero').url),
                 str(event.name),
                 event.name,
             )
@@ -271,8 +270,7 @@ class WalletobjectOutput(BaseTicketOutput):
 
         if event.settings.get('ticketoutput_googlepaypasses_logo'):
             evTclass.logo(
-                # urljoin(django_settings.SITE_URL, event.settings.get('ticketoutput_googlepaypasses_logo').url),
-                'https://us.pc-coholic.de/pretix-logo.png',
+                urljoin(django_settings.SITE_URL, event.settings.get('ticketoutput_googlepaypasses_logo').url),
                 str(event.name),
                 event.name,
             )
