@@ -1,0 +1,32 @@
+{% extends "pretixbase/email/base.html" %}
+{% load i18n %}
+{% load eventurl %}
+{% load staticfiles %}
+{% load static %}
+
+{% block content %}
+    <tr>
+        <td class="containertd">
+            <div class="content">
+                <h3>{% trans "Administrative notice" %}</h3>
+                <p>
+                    {% blocktrans trimmed %}
+                    Unfortunately, this version of the  pretix-googlepaypasses plugin is unable to generate
+                    previews.
+                    <br><br>
+                    Please configure the passes to the best of your ability and test them with a real order.
+                    <br><br>
+                    <strong>Hint:</strong><br>
+                    If you change the look of your passes (color, logo, etc.), passes that have already been
+                    issued and imported into GPay-wallets will automatically be updated to reflect those
+                    changes.
+                    <br><br>
+                    There is no need to reissue or redownload those passes - your visitors will always have
+                    up to date passes.
+                    {% endblocktrans %}
+                </p>
+            </div>
+        </td>
+    </tr>
+
+{% endblock %}

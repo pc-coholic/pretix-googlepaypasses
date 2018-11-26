@@ -95,7 +95,12 @@ class WalletobjectOutput(BaseTicketOutput):
             'position': order_position,
             'site_url':  django_settings.SITE_URL
         }
-        tpl_html = get_template('pretix_googlepaypasses/downloadfallback.html')
+
+        if (str(order.code) == 'PREVIEW1234' and str(order_position.item) == 'Sample product'):
+            tpl_html = get_template('pretix_googlepaypasses/preview.html')
+        else:
+            tpl_html = get_template('pretix_googlepaypasses/downloadfallback.html')
+
         body_html = inline_css(tpl_html.render(ctx))
 
         return 'googlepaypass-%s-%s.html' % (ev.slug, order.code), 'text/html', body_html
