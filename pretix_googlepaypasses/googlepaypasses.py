@@ -12,6 +12,7 @@ from django.utils.translation import ugettext, ugettext_lazy as _
 from google.auth import crypt, jwt
 from google.auth.transport.requests import AuthorizedSession
 from google.oauth2 import service_account
+from inlinestyler.utils import inline_css
 from pretix.base.models import OrderPosition, RequiredAction
 from pretix.base.settings import GlobalSettingsObject
 from pretix.base.ticketoutput import BaseTicketOutput
@@ -21,7 +22,7 @@ from walletobjects.constants import (
     barcode, confirmationCode, doorsOpen,
     multipleDevicesAndHoldersAllowedStatus, objectState, reviewStatus,
 )
-from inlinestyler.utils import inline_css
+
 from .forms import PNGImageField
 
 
@@ -99,7 +100,7 @@ class WalletobjectOutput(BaseTicketOutput):
             'event': ev,
             'order': order,
             'position': order_position,
-            'site_url':  django_settings.SITE_URL
+            'site_url': django_settings.SITE_URL
         }
 
         if (str(order.code) == 'PREVIEW1234' and str(order_position.item) == 'Sample product'):

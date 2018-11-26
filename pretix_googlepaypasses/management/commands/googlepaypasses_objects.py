@@ -1,11 +1,11 @@
+import json
+
 from django.core.management.base import BaseCommand
-from google.auth.transport.requests import AuthorizedSession
-from google.oauth2 import service_account
 from pretix.base.settings import GlobalSettingsObject
 from pretix_googlepaypasses.googlepaypasses import WalletobjectOutput
 from walletobjects import eventTicketObject
 from walletobjects.constants import objectState
-import json
+
 
 class Command(BaseCommand):
     help = "Query the Google Pay API for Passes for registred eventticketobjects"
