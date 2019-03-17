@@ -340,7 +340,7 @@ class WalletobjectOutput(BaseTicketOutput):
 
         evTobject = eventTicketObject(evTobjectID, eventTicketClassName, objectState.active, op.order.event.settings.locale)
 
-        evTobject.barcode(barcode.qrCode, op.secret)
+        evTobject.barcode(barcode.qrCode, op.secret, op.secret)
 
         evTobject.reservationInfo("%s-%s" % (op.order.event.slug, op.order.code))
         evTobject.ticketHolderName(op.attendee_name or (op.addon_to.attendee_name if op.addon_to else ''))
