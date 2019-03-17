@@ -2,8 +2,8 @@ import json
 import logging
 from json import JSONDecodeError
 
-from django.http import HttpResponseRedirect, JsonResponse, HttpResponseForbidden, HttpResponseBadRequest, HttpResponse, \
-    Http404
+from django.http import JsonResponse, HttpResponseBadRequest, HttpResponse, \
+    Http404, HttpResponseForbidden
 from django.views import View
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
@@ -59,19 +59,27 @@ class redirectToWalletObjectJWT(OrderDetailMixin, AsyncAction, View):
 @csrf_exempt
 @require_POST
 def webhook(request, *args, **kwargs):
-    if request.META['HTTP_USER_AGENT'] != 'Google-Valuables':
+    # Google is not actually sending their documented UA m(
+    #if request.META['HTTP_USER_AGENT'] != 'Google-Valuables':
+    if request.META['HTTP_USER_AGENT'] != "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)":
         return HttpResponseForbidden()
 
-    if request.META.get('HTTP_ACCEPT') != 'application/json':
+    if request.META.get('CONTENT_TYPE') != 'application/json':
         return HttpResponseBadRequest()
 
     try:
-        webhook_json = json.loads(request.body.decode('utf-8'))
-        print(webhook_json)
+        webhook_json = json.loads(request.body)
     except JSONDecodeError:
-        return HttpResponseBadRequest()
+        return False
 
-    # https://developers.google.com/pay/passes/guides/overview/how-to/use-callbacks#expected-message-format
-    # Worker: Check signature
-    # Worker: Process
+    if all (k in webhook_json for k in ('signature', 'intermediateSigningKey', 'protocolVersion', 'signedMessage')):
+        # ToDo: Check signature
+        # webhook_json['signature']
+        # webhook_json['intermediateSigningKey']['signedKey']['keyValue']
+        # webhook_json['intermediateSigningKey']['signedKey']['keyExpiration']
+        # webhook_json['intermediateSigningKey']['signatures'][0]
+        # webhook_json['protocolVersion']
+        # webhook_json['signedMessage']
+        tasks.procesWebhook.apply_async(args=(webhook_json['signedMessage'],))
+
     return HttpResponse()

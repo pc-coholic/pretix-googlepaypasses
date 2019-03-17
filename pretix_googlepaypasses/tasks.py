@@ -1,4 +1,6 @@
 import json
+from json import JSONDecodeError
+
 from pretix.base.models import Order, OrderPosition, Event
 from .googlepaypasses import WalletobjectOutput
 from pretix.celery_app import app
@@ -73,3 +75,26 @@ def generateEventTicketObject(opId, update=False, ship=False):
     authedSession = WalletobjectOutput.getAuthedSession(op.event.settings)
 
     WalletobjectOutput.generateEventTicketObject(op, authedSession, update, ship)
+
+@app.task
+def procesWebhook(webhookbody):
+    try:
+        webhook_json = json.loads(webhookbody)
+    except JSONDecodeError:
+        return False
+
+    if 'objectId' and 'eventType' in webhook_json:
+        if webhook_json['eventType'] == 'del':
+            op = OrderPosition.objects.filter(
+                meta_info__contains='"googlepaypass": "{}"'.format(webhook_json['objectId'])
+            ).first()
+
+            if op:
+                shredEventTicketObject.apply_async(args=(op.id,))
+
+        elif webhook_json['eventType'] == 'save':
+            pass
+
+        return True
+
+    return False
