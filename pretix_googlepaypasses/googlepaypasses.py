@@ -17,7 +17,8 @@ from pretix.base.models import OrderPosition, RequiredAction
 from pretix.base.settings import GlobalSettingsObject
 from pretix.base.ticketoutput import BaseTicketOutput
 from pretix.multidomain.urlreverse import build_absolute_uri
-from walletobjects import buttonJWT, eventTicketClass, eventTicketObject
+from pretix.helpers.urls import build_absolute_uri as build_global_uri
+from walletobjects import buttonJWT, skinnyButtonJWT, eventTicketClass, eventTicketObject
 from walletobjects.constants import (
     barcode, confirmationCode, doorsOpen,
     multipleDevicesAndHoldersAllowedStatus, objectState, reviewStatus,
@@ -144,6 +145,7 @@ class WalletobjectOutput(BaseTicketOutput):
             return False
 
         walletobjectJWT = WalletobjectOutput.generateWalletobjectJWT(order.event.settings, eventTicketObject)
+        #walletobjectJWT = WalletobjectOutput.generateWalletobjectJWT(order.event.settings, eventTicketObject['id'])
 
         if not walletobjectJWT:
             return False
@@ -253,6 +255,8 @@ class WalletobjectOutput(BaseTicketOutput):
             WalletobjectOutput.getTranslatedString('Website', event.settings.get('locale')),
             WalletobjectOutput.getTranslatedDict('Website', event.settings.get('locales'))
         )
+
+        evTclass.callbackUrl(build_global_uri('plugins:pretix_googlepaypasses:webhook'))
 
         if (event.settings.get('ticketoutput_googlepaypasses_latitude')
            and event.settings.get('ticketoutput_googlepaypasses_longitude')):
@@ -378,6 +382,7 @@ class WalletobjectOutput(BaseTicketOutput):
             return evTobject
 
     def generateWalletobjectJWT(settings, payload):
+    #def generateWalletobjectJWT(settings, objectID):
         credentials = json.loads(settings.get('googlepaypasses_credentials'))
 
         button = buttonJWT(
@@ -385,6 +390,11 @@ class WalletobjectOutput(BaseTicketOutput):
             issuer=credentials['client_email'],
             eventTicketObjects=[json.loads(str(payload))],
         )
+        # button = skinnyButtonJWT(
+        #     origins=[django_settings.SITE_URL],
+        #     issuer=credentials['client_email'],
+        #     objectID=objectID,
+        # )
         signer = crypt.RSASigner.from_service_account_info(credentials)
         payload = json.loads(str(button))
         encoded = jwt.encode(signer, payload)
@@ -393,32 +403,6 @@ class WalletobjectOutput(BaseTicketOutput):
             return False
 
         return encoded.decode("utf-8")
-
-    def shredEventTicketObject(op, authedSession):
-        meta_info = json.loads(op.meta_info or '{}')
-
-        if 'googlepaypass' not in meta_info:
-            return True
-
-        evTobjectID = meta_info['googlepaypass']
-        eventTicketClassName = WalletobjectOutput.constructClassID(op.order.event)
-        evTobject = eventTicketObject(evTobjectID, eventTicketClassName, objectState.inactive, op.order.event.settings.locale)
-
-        result = authedSession.put(
-            'https://www.googleapis.com/walletobjects/v1/eventTicketObject/%s?strict=true' % evTobjectID,
-            json=json.loads(str(evTobject))
-        )
-
-        if result.status_code == 200:
-            # Remove googlepaypass from OrderPostition meta_info once it has been shredded
-            meta_info.pop('googlepaypass')
-            op.meta_info = json.dumps(meta_info)
-            op.save(update_fields=['meta_info'])
-            return True
-        else:
-            print(result.status_code)
-            print(result.text)
-            return False
 
     def getTranslatedDict(string, locales):
         translatedDict = {}

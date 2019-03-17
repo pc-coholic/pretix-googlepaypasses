@@ -14,6 +14,7 @@ from pretix.base.signals import (
 )
 from pretix.presale.signals import html_head as html_head_presale
 from pretix_googlepaypasses.googlepaypasses import WalletobjectOutput
+from .import tasks
 
 from .forms import validate_json_credentials
 
@@ -65,31 +66,35 @@ def html_head_presale(sender, request=None, **kwargs):
 
 @receiver(post_save, sender=LogEntry, dispatch_uid="googlepaypasses_logentry_post_save")
 def logentry_post_save(sender, instance, **kwargs):
-    if instance.action_type in ['pretix.event.order.secret.changed', 'pretix.event.order.changed.secret']:
+    if instance.action_type in [
+        'pretix.event.order.secret.changed', 'pretix.event.order.changed.secret', 'pretix.event.order.changed.cancel',
+        'pretix.event.order.changed.split'
+    ]:
         instanceData = json.loads(instance.data)
 
         if 'position' and 'positionid' in instanceData:
             # {"position": 4, "positionid": 1} --> changed OrderPosition
             op = OrderPosition.objects.get(order=instance.object_id, id=instanceData['position'])
-            WalletobjectOutput.shredEventTicketObject(op, WalletobjectOutput.getAuthedSession(op.order.event.settings))
+            tasks.shredEventTicketObject.apply_async(args=(op.id,))
         else:
             # {} --> whole changed Order
             ops = OrderPosition.objects.filter(order=instance.object_id)
             for op in ops:
-                WalletobjectOutput.shredEventTicketObject(op, WalletobjectOutput.getAuthedSession(op.order.event.settings))
+                tasks.shredEventTicketObject.apply_async(args=(op.id,))
+    elif instance.action_type in ['pretix.event.order.changed.item', 'pretix.event.order.changed.price', 'pretix.event.order.changed.subevent']:
+        instanceData = json.loads(instance.data)
+        op = OrderPosition.objects.get(order=instance.object_id, id=instanceData['position'])
+
+        tasks.generateEventTicketObjectIfExisting.apply_async(args=(op.id,))
     elif instance.action_type in ['pretix.event.tickets.provider.googlepaypasses', 'pretix.event.changed', 'pretix.event.settings']:
         event = Event.objects.get(id=instance.event_id)
-        authedSession = WalletobjectOutput.getAuthedSession(event.settings)
 
-        if WalletobjectOutput.checkIfEventTicketClassExists(event, authedSession):
-            WalletobjectOutput.generateEventTicketClass(event, authedSession, update=True)
+        tasks.generateEventTicketClassIfExisting.apply_async(args=(event.id,))
     elif instance.action_type in ['pretix.organizer.settings']:
         events = Event.objects.filter(organizer_id=instance.object_id, plugins__contains='pretix_googlepaypasses')
 
         for event in events:
-            authedSession = WalletobjectOutput.getAuthedSession(event.settings)
-            if WalletobjectOutput.checkIfEventTicketClassExists(event, authedSession):
-                WalletobjectOutput.generateEventTicketClass(event, authedSession, update=True)
+            tasks.generateEventTicketClassIfExisting.apply_async(args=(event.id))
 
 
 @receiver(signal=requiredaction_display, dispatch_uid="googlepaypasses_requiredaction_display")

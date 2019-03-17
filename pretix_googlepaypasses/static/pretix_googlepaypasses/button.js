@@ -9,7 +9,8 @@ $(function() {
 
   $('form[action*="googlepaypasses"]').click(function(event) {
     event.preventDefault();
-    $('#googlepaypassesmodal .btn-primary').attr('href', $(this).attr('action') + '/generate');
+    $('#googlepaypassesmodal form').attr('action', $(this).attr('action') + '/generate');
+    $('#googlepaypassesmodal form input[name=csrfmiddlewaretoken]').attr('value', $('input[name=csrfmiddlewaretoken]:last').val());
     $('#googlepaypassesmodal').modal('toggle');
     return false;
   });
