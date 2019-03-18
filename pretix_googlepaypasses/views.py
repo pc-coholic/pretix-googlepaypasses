@@ -2,18 +2,20 @@ import json
 import logging
 from json import JSONDecodeError
 
-from django.http import JsonResponse, HttpResponseBadRequest, HttpResponse, \
-    Http404, HttpResponseForbidden
+from base.views.tasks import AsyncAction
+from django.http import (
+    Http404, HttpResponse, HttpResponseBadRequest, HttpResponseForbidden,
+    JsonResponse,
+)
+from django.utils.translation import ugettext_lazy as _
 from django.views import View
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 from googlemaps import Client
 from googlemaps.exceptions import ApiError
-
-from base.views.tasks import AsyncAction
+from pretix.base.models import Organizer
 from pretix.control.permissions import EventPermissionRequiredMixin
 from pretix.presale.views.order import OrderDetailMixin
-from django.utils.translation import ugettext_lazy as _
 
 from . import tasks
 
@@ -60,7 +62,7 @@ class redirectToWalletObjectJWT(OrderDetailMixin, AsyncAction, View):
 @require_POST
 def webhook(request, *args, **kwargs):
     # Google is not actually sending their documented UA m(
-    #if request.META['HTTP_USER_AGENT'] != 'Google-Valuables':
+    # if request.META['HTTP_USER_AGENT'] != 'Google-Valuables':
     if request.META['HTTP_USER_AGENT'] != "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)":
         return HttpResponseForbidden()
 
@@ -72,14 +74,11 @@ def webhook(request, *args, **kwargs):
     except JSONDecodeError:
         return False
 
-    if all (k in webhook_json for k in ('signature', 'intermediateSigningKey', 'protocolVersion', 'signedMessage')):
-        # ToDo: Check signature
-        # webhook_json['signature']
-        # webhook_json['intermediateSigningKey']['signedKey']['keyValue']
-        # webhook_json['intermediateSigningKey']['signedKey']['keyExpiration']
-        # webhook_json['intermediateSigningKey']['signatures'][0]
-        # webhook_json['protocolVersion']
-        # webhook_json['signedMessage']
-        tasks.procesWebhook.apply_async(args=(webhook_json['signedMessage'],))
+    if all(k in webhook_json for k in ('signature', 'intermediateSigningKey', 'protocolVersion', 'signedMessage')):
+        organizer = Organizer.objects.filter(
+            slug=request.resolver_match.kwargs['organizer'],
+        ).first()
+
+        tasks.procesWebhook.apply_async(args=(request.body, organizer.settings.googlepaypasses_issuer_id))
 
     return HttpResponse()

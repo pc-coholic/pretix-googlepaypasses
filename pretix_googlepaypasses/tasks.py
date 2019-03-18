@@ -1,17 +1,20 @@
 import json
 from json import JSONDecodeError
 
-from pretix.base.models import Order, OrderPosition, Event
-from .googlepaypasses import WalletobjectOutput
+from pretix.base.models import Event, Order, OrderPosition
 from pretix.celery_app import app
-from walletobjects import eventTicketObject
+from walletobjects import eventTicketObject, utils
 from walletobjects.constants import objectState
+
+from .googlepaypasses import WalletobjectOutput
+
 
 @app.task
 def generateWalletObjectJWT(orderId, positionId):
     order = Order.objects.get(id=orderId)
 
     return WalletobjectOutput.getWalletObjectJWT(order, positionId)
+
 
 @app.task
 def shredEventTicketObject(opId):
@@ -44,6 +47,7 @@ def shredEventTicketObject(opId):
         print(result.text)
         return False
 
+
 @app.task
 def generateEventTicketClassIfExisting(eventId):
     event = Event.objects.get(id=eventId)
@@ -52,12 +56,14 @@ def generateEventTicketClassIfExisting(eventId):
     if WalletobjectOutput.checkIfEventTicketClassExists(event, authedSession):
         generateEventTicketClass.apply_async(args=(event.id, True))
 
+
 @app.task
 def generateEventTicketClass(eventId, update=False):
     event = Event.objects.get(id=eventId)
     authedSession = WalletobjectOutput.getAuthedSession(event.settings)
 
     WalletobjectOutput.generateEventTicketClass(event, authedSession, update)
+
 
 @app.task
 def generateEventTicketObjectIfExisting(opId):
@@ -69,6 +75,7 @@ def generateEventTicketObjectIfExisting(opId):
     if (walletObject):
         generateEventTicketObject.apply_async(args=(opId, True, True))
 
+
 @app.task
 def generateEventTicketObject(opId, update=False, ship=False):
     op = OrderPosition.objects.get(id=opId)
@@ -76,12 +83,15 @@ def generateEventTicketObject(opId, update=False, ship=False):
 
     WalletobjectOutput.generateEventTicketObject(op, authedSession, update, ship)
 
+
 @app.task
-def procesWebhook(webhookbody):
+def procesWebhook(webhookbody, issuerId):
     try:
         webhook_json = json.loads(webhookbody)
     except JSONDecodeError:
         return False
+
+    webhook_json = utils.unsealCallback(webhook_json, issuerId)
 
     if 'objectId' and 'eventType' in webhook_json:
         if webhook_json['eventType'] == 'del':

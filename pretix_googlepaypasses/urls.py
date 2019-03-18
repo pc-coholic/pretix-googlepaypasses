@@ -7,7 +7,7 @@ urlpatterns = [
     url(r'^control/event/(?P<organizer>[^/]+)/(?P<event>[^/]+)/googlepaypasses/geocode/$',
         GeoCodeView.as_view(),
         name='geocode'),
-    url(r'^_googlepaypasses/webhook/$', webhook, name='webhook'),
+    url(r'^_googlepaypasses/webhook/(?P<organizer>[^/]+)/$', webhook, name='webhook'),
 ]
 
 event_patterns = [
