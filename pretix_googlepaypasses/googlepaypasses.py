@@ -17,7 +17,6 @@ from pretix.base.models import OrderPosition, RequiredAction
 from pretix.base.settings import GlobalSettingsObject
 from pretix.base.ticketoutput import BaseTicketOutput
 from pretix.multidomain.urlreverse import build_absolute_uri
-from pretix.helpers.urls import build_absolute_uri as build_global_uri
 from walletobjects import buttonJWT, skinnyButtonJWT, eventTicketClass, eventTicketObject
 from walletobjects.constants import (
     barcode, confirmationCode, doorsOpen,
@@ -256,7 +255,7 @@ class WalletobjectOutput(BaseTicketOutput):
             WalletobjectOutput.getTranslatedDict('Website', event.settings.get('locales'))
         )
 
-        evTclass.callbackUrl(build_global_uri('plugins:pretix_googlepaypasses:webhook'))
+        evTclass.callbackUrl(build_absolute_uri(event.organizer, 'plugins:pretix_googlepaypasses:webhook'))
 
         if (event.settings.get('ticketoutput_googlepaypasses_latitude')
            and event.settings.get('ticketoutput_googlepaypasses_longitude')):
