@@ -2,7 +2,7 @@ import json
 import logging
 from json import JSONDecodeError
 
-from base.views.tasks import AsyncAction
+from pretix.base.views.tasks import AsyncAction
 from django.http import (
     Http404, HttpResponse, HttpResponseBadRequest, HttpResponseForbidden,
     JsonResponse,
