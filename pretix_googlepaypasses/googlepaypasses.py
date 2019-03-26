@@ -17,7 +17,7 @@ from pretix.base.models import OrderPosition, RequiredAction
 from pretix.base.settings import GlobalSettingsObject
 from pretix.base.ticketoutput import BaseTicketOutput
 from pretix.multidomain.urlreverse import build_absolute_uri
-from walletobjects import buttonJWT, skinnyButtonJWT, eventTicketClass, eventTicketObject
+from walletobjects import buttonJWT, eventTicketClass, eventTicketObject
 from walletobjects.constants import (
     barcode, confirmationCode, doorsOpen,
     multipleDevicesAndHoldersAllowedStatus, objectState, reviewStatus,
@@ -144,7 +144,6 @@ class WalletobjectOutput(BaseTicketOutput):
             return False
 
         walletobjectJWT = WalletobjectOutput.generateWalletobjectJWT(order.event.settings, eventTicketObject)
-        #walletobjectJWT = WalletobjectOutput.generateWalletobjectJWT(order.event.settings, eventTicketObject['id'])
 
         if not walletobjectJWT:
             return False
@@ -381,19 +380,15 @@ class WalletobjectOutput(BaseTicketOutput):
             return evTobject
 
     def generateWalletobjectJWT(settings, payload):
-    #def generateWalletobjectJWT(settings, objectID):
         credentials = json.loads(settings.get('googlepaypasses_credentials'))
 
         button = buttonJWT(
             origins=[django_settings.SITE_URL],
             issuer=credentials['client_email'],
             eventTicketObjects=[json.loads(str(payload))],
+            skinny=True
         )
-        # button = skinnyButtonJWT(
-        #     origins=[django_settings.SITE_URL],
-        #     issuer=credentials['client_email'],
-        #     objectID=objectID,
-        # )
+
         signer = crypt.RSASigner.from_service_account_info(credentials)
         payload = json.loads(str(button))
         encoded = jwt.encode(signer, payload)
