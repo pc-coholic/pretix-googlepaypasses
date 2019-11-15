@@ -6,13 +6,11 @@ from urllib.parse import urljoin
 
 from django import forms
 from django.conf import settings as django_settings
-from django.template.loader import get_template
 from django.utils import translation
 from django.utils.translation import ugettext, ugettext_lazy as _
 from google.auth import crypt, jwt
 from google.auth.transport.requests import AuthorizedSession
 from google.oauth2 import service_account
-from inlinestyler.utils import inline_css
 from pretix.base.models import OrderPosition, RequiredAction
 from pretix.base.settings import GlobalSettingsObject
 from pretix.base.ticketoutput import BaseTicketOutput
@@ -21,7 +19,7 @@ from walletobjects import buttonJWT, eventTicketClass, eventTicketObject
 from walletobjects.constants import (
     barcode, confirmationCode, doorsOpen,
     multipleDevicesAndHoldersAllowedStatus, objectState, reviewStatus,
-)
+    seat)
 
 from .forms import PNGImageField
 
@@ -32,6 +30,8 @@ class WalletobjectOutput(BaseTicketOutput):
     download_button_icon = 'fa-google'
     download_button_text = _('Pay | Save to phone')
     multi_download_enabled = False
+    preview_allowed = False
+    javascript_required = True
 
     @property
     def settings_form_fields(self) -> dict:
@@ -80,11 +80,13 @@ class WalletobjectOutput(BaseTicketOutput):
                 ('latitude',
                  forms.FloatField(
                      label=_('Event location (latitude)'),
+                     help_text=_('Will be taken from event settings by default.'),
                      required=False
                  )),
                 ('longitude',
                  forms.FloatField(
                      label=_('Event location (longitude)'),
+                     help_text=_('Will be taken from event settings by default.'),
                      required=False
                  )),
             ]
@@ -93,31 +95,13 @@ class WalletobjectOutput(BaseTicketOutput):
     def generate(self, order_position: OrderPosition) -> Tuple[str, str, str]:
         order = order_position.order
         ev = order_position.subevent or order.event
-        # tz = pytz.timezone(order.event.settings.get('timezone'))
 
-        ctx = {
-            'color': ev.settings.get('primary_color'),
-            'event': ev,
-            'order': order,
-            'position': order_position,
-            'site_url': django_settings.SITE_URL
-        }
+        generated_jwt = WalletobjectOutput.getWalletObjectJWT(order, order_position.pk)
 
-        if (str(order.code) == 'PREVIEW1234' and str(order_position.item) == 'Sample product'):
-            tpl_html = get_template('pretix_googlepaypasses/preview.html')
+        if generated_jwt:
+            return 'googlepaypass', 'text/uri-list', 'https://pay.google.com/gp/v/save/%s' % generated_jwt
         else:
-            tpl_html = get_template('pretix_googlepaypasses/downloadfallback.html')
-
-        body_html = inline_css(tpl_html.render(ctx))
-
-        return 'googlepaypass-%s-%s.html' % (ev.slug, order.code), 'text/html', body_html
-
-    def settings_content_render(self, request) -> str:
-        if self.event.settings.get('passbook_gmaps_api_key') and self.event.location:
-            template = get_template('pretix_googlepaypasses/form.html')
-            return template.render({
-                'request': request
-            })
+            return False
 
     def getWalletObjectJWT(order, positionid):
         if not order:
@@ -257,11 +241,16 @@ class WalletobjectOutput(BaseTicketOutput):
         evTclass.callbackUrl(build_absolute_uri(event.organizer, 'plugins:pretix_googlepaypasses:webhook'))
 
         if (event.settings.get('ticketoutput_googlepaypasses_latitude')
-           and event.settings.get('ticketoutput_googlepaypasses_longitude')):
-                evTclass.locations(
-                    event.settings.get('ticketoutput_googlepaypasses_latitude'),
-                    event.settings.get('ticketoutput_googlepaypasses_longitude')
-                )
+                and event.settings.get('ticketoutput_googlepaypasses_longitude')):
+            evTclass.locations(
+                event.settings.get('ticketoutput_googlepaypasses_latitude'),
+                event.settings.get('ticketoutput_googlepaypasses_longitude')
+            )
+        elif event.geo_lat and event.geo_lon:
+            evTclass.locations(
+                event.geo_lat,
+                event.geo_lon
+            )
 
         evTclass.countryCode(event.settings.get('locale'))
 
@@ -303,6 +292,9 @@ class WalletobjectOutput(BaseTicketOutput):
             )
 
         evTclass.confirmationCodeLabel(confirmationCode.orderNumber)
+
+        if event.seating_plan_id is not None:
+            evTclass.seatLabel(seat.seat)
 
         if update:
             result = authedSession.put(
@@ -352,6 +344,22 @@ class WalletobjectOutput(BaseTicketOutput):
 
         places = django_settings.CURRENCY_PLACES.get(op.order.event.currency, 2)
         evTobject.faceValue(int(op.price * 1000 ** places), op.order.event.currency)
+
+        if op.order.event.seating_plan_id is not None:
+            if op.seat:
+                evTobject.seat(
+                    WalletobjectOutput.getTranslatedDict(
+                        _(str(op.seat)),
+                        op.order.event.settings.get('locales')
+                    )
+                )
+            else:
+                evTobject.seat(
+                    WalletobjectOutput.getTranslatedDict(
+                        _('General admission'),
+                        op.order.event.settings.get('locales')
+                    )
+                )
 
         if ship:
             if update:

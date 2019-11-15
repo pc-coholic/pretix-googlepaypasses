@@ -1,6 +1,8 @@
 import json
 from json import JSONDecodeError
 
+from django_scopes import scopes_disabled
+
 from pretix.base.models import Event, Order, OrderPosition
 from pretix.celery_app import app
 from walletobjects import eventTicketObject, utils
@@ -17,6 +19,7 @@ def generateWalletObjectJWT(orderId, positionId):
 
 
 @app.task
+@scopes_disabled()
 def shredEventTicketObject(opId):
     op = OrderPosition.objects.get(id=opId)
     authedSession = WalletobjectOutput.getAuthedSession(op.event.settings)
@@ -85,6 +88,7 @@ def generateEventTicketObject(opId, update=False, ship=False):
 
 
 @app.task
+@scopes_disabled()
 def procesWebhook(webhookbody, issuerId):
     try:
         webhook_json = json.loads(webhookbody)

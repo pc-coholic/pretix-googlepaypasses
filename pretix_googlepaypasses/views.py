@@ -4,39 +4,18 @@ from json import JSONDecodeError
 
 from pretix.base.views.tasks import AsyncAction
 from django.http import (
-    Http404, HttpResponse, HttpResponseBadRequest, HttpResponseForbidden,
-    JsonResponse,
+    Http404, HttpResponse, HttpResponseBadRequest, HttpResponseForbidden
 )
 from django.utils.translation import ugettext_lazy as _
 from django.views import View
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
-from googlemaps import Client
-from googlemaps.exceptions import ApiError
 from pretix.base.models import Organizer
-from pretix.control.permissions import EventPermissionRequiredMixin
 from pretix.presale.views.order import OrderDetailMixin
 
 from . import tasks
 
 logger = logging.getLogger(__name__)
-
-
-class GeoCodeView(EventPermissionRequiredMixin, View):
-    def post(self, request, *args, **kwargs):
-        c = Client(key=request.event.settings.get('passbook_gmaps_api_key'))
-        try:
-            r = c.geocode(address=request.event.location, language=request.LANGUAGE_CODE.split("_")[0])
-        except ApiError:
-            logger.exception('Google Maps API Error')
-            return JsonResponse({
-                'status': 'error',
-            })
-        else:
-            return JsonResponse({
-                'status': 'ok',
-                'result': r
-            })
 
 
 class redirectToWalletObjectJWT(OrderDetailMixin, AsyncAction, View):
@@ -70,7 +49,7 @@ def webhook(request, *args, **kwargs):
         return HttpResponseBadRequest()
 
     try:
-        webhook_json = json.loads(request.body)
+        webhook_json = json.loads(request.body.decode('utf-8'))
     except JSONDecodeError:
         return False
 
@@ -79,6 +58,6 @@ def webhook(request, *args, **kwargs):
             slug=request.resolver_match.kwargs['organizer'],
         ).first()
 
-        tasks.procesWebhook.apply_async(args=(request.body, organizer.settings.googlepaypasses_issuer_id))
+        tasks.procesWebhook.apply_async(args=(request.body.decode('utf-8'), organizer.settings.googlepaypasses_issuer_id))
 
     return HttpResponse()

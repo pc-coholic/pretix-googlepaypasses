@@ -57,7 +57,7 @@ def register_global_settings(sender, **kwargs):
 def html_head_presale(sender, request=None, **kwargs):
     url = resolve(request.path_info)
 
-    if url.namespace == 'presale' and url.func.__name__ == 'OrderDetails':
+    if url.namespace == 'presale' and url.func.__name__ in ['OrderDetails', 'OrderPositionDetails']:
         template = get_template('pretix_googlepaypasses/presale_head.html')
         return template.render({})
     else:

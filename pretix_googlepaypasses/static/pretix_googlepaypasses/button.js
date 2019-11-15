@@ -9,7 +9,7 @@ $(function() {
 
   $('form[action*="googlepaypasses"]').click(function(event) {
     event.preventDefault();
-    $('#googlepaypassesmodal form').attr('action', $(this).attr('action') + '/generate');
+    $('#googlepaypassesmodal form').attr('action', $(this).attr('action'));
     $('#googlepaypassesmodal form input[name=csrfmiddlewaretoken]').attr('value', $('input[name=csrfmiddlewaretoken]:last').val());
     $('#googlepaypassesmodal').modal('toggle');
     return false;
