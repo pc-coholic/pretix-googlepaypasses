@@ -94,7 +94,7 @@ def logentry_post_save(sender, instance, **kwargs):
         events = Event.objects.filter(organizer_id=instance.object_id, plugins__contains='pretix_googlepaypasses')
 
         for event in events:
-            tasks.generateEventTicketClassIfExisting.apply_async(args=(event.id))
+            tasks.generateEventTicketClassIfExisting.apply_async(args=(event.id,))
 
 
 @receiver(signal=requiredaction_display, dispatch_uid="googlepaypasses_requiredaction_display")
