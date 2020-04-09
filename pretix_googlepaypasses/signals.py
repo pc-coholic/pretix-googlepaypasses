@@ -66,51 +66,36 @@ def html_head_presale(sender, request=None, **kwargs):
 
 @receiver(post_save, sender=LogEntry, dispatch_uid="googlepaypasses_logentry_post_save")
 def logentry_post_save(sender, instance, **kwargs):
-    if instance.action_type in [
-        'pretix.event.order.secret.changed', 'pretix.event.order.changed.secret', 'pretix.event.order.changed.cancel',
-        'pretix.event.order.changed.split'
-    ]:
-        instanceData = json.loads(instance.data)
-
-        if 'position' and 'positionid' in instanceData:
-            # {"position": 4, "positionid": 1} --> changed OrderPosition
-            op = OrderPosition.objects.get(order=instance.object_id, id=instanceData['position'])
-            tasks.shredEventTicketObject.apply_async(args=(op.id,))
-        else:
-            # {} --> whole changed Order
-            ops = OrderPosition.objects.filter(order=instance.object_id)
-            for op in ops:
-                tasks.shredEventTicketObject.apply_async(args=(op.id,))
-    elif instance.action_type in ['pretix.event.order.changed.item', 'pretix.event.order.changed.price', 'pretix.event.order.changed.subevent']:
-        instanceData = json.loads(instance.data)
-        op = OrderPosition.objects.get(order=instance.object_id, id=instanceData['position'])
-
-        tasks.generateEventTicketObjectIfExisting.apply_async(args=(op.id,))
-    elif instance.action_type in ['pretix.event.tickets.provider.googlepaypasses', 'pretix.event.changed', 'pretix.event.settings']:
-        event = Event.objects.get(id=instance.event_id)
-
-        tasks.generateEventTicketClassIfExisting.apply_async(args=(event.id,))
-    elif instance.action_type in ['pretix.organizer.settings']:
-        events = Event.objects.filter(organizer_id=instance.object_id, plugins__contains='pretix_googlepaypasses')
-
-        for event in events:
-            tasks.generateEventTicketClassIfExisting.apply_async(args=(event.id,))
-
-
-@receiver(signal=requiredaction_display, dispatch_uid="googlepaypasses_requiredaction_display")
-def pretixcontrol_action_display(sender, action, request, **kwargs):
-    if not action.action_type.startswith('pretix_googlepaypasses'):
-        return
-
-    data = json.loads(action.data)
-
-    if action.action_type == 'pretix_googlepaypasses.evenTicketClassFail':
-        template = get_template('pretix_googlepaypasses/action_evenTicketClassFail.html')
-    elif action.action_type == 'pretix_googlepaypasses.evenTicketObjectFail':
-        template = get_template('pretix_googlepaypasses/action_evenTicketObjectFail.html')
-
-    ctx = {'data': data, 'event': sender, 'action': action}
-    return template.render(ctx, request)
+    return
+    # if instance.action_type in [
+    #     'pretix.event.order.secret.changed', 'pretix.event.order.changed.secret', 'pretix.event.order.changed.cancel',
+    #     'pretix.event.order.changed.split'
+    # ]:
+    #     instanceData = json.loads(instance.data)
+    #
+    #     if 'position' and 'positionid' in instanceData:
+    #         # {"position": 4, "positionid": 1} --> changed OrderPosition
+    #         op = OrderPosition.objects.get(order=instance.object_id, id=instanceData['position'])
+    #         tasks.shredEventTicketObject.apply_async(args=(op.id,))
+    #     else:
+    #         # {} --> whole changed Order
+    #         ops = OrderPosition.objects.filter(order=instance.object_id)
+    #         for op in ops:
+    #             tasks.shredEventTicketObject.apply_async(args=(op.id,))
+    # elif instance.action_type in ['pretix.event.order.changed.item', 'pretix.event.order.changed.price', 'pretix.event.order.changed.subevent']:
+    #     instanceData = json.loads(instance.data)
+    #     op = OrderPosition.objects.get(order=instance.object_id, id=instanceData['position'])
+    #
+    #     tasks.generateEventTicketObjectIfExisting.apply_async(args=(op.id,))
+    # elif instance.action_type in ['pretix.event.tickets.provider.googlepaypasses', 'pretix.event.changed', 'pretix.event.settings']:
+    #     event = Event.objects.get(id=instance.event_id)
+    #
+    #     tasks.generateEventTicketClassIfExisting.apply_async(args=(event.id,))
+    # elif instance.action_type in ['pretix.organizer.settings']:
+    #     events = Event.objects.filter(organizer_id=instance.object_id, plugins__contains='pretix_googlepaypasses')
+    #
+    #     for event in events:
+    #         tasks.generateEventTicketClassIfExisting.apply_async(args=(event.id,))
 
 
 @receiver(signal=periodic_task)
@@ -125,13 +110,13 @@ def shred_unused_objects(sender, **kwargs):
     # offer automatic shredding of unused passes. Sucks :-(
     return
 
-    ops = OrderPosition.objects.filter(meta_info__contains='"googlepaypass"')
-    for op in ops:
-        authedSession = WalletobjectOutput.getAuthedSession(op.order.event.settings)
-        meta_info = json.loads(op.meta_info or '{}')
-        evTobjectID = meta_info['googlepaypass']
-
-        evTobject = WalletobjectOutput.getEventTicketObjectFromServer(evTobjectID, authedSession)
-
-        if not evTobject['hasUsers']:
-            WalletobjectOutput.shredEventTicketObject(op, authedSession)
+    # ops = OrderPosition.objects.filter(meta_info__contains='"googlepaypass"')
+    # for op in ops:
+    #     authedSession = WalletobjectOutput.getAuthedSession(op.order.event.settings)
+    #     meta_info = json.loads(op.meta_info or '{}')
+    #     evTobjectID = meta_info['googlepaypass']
+    #
+    #     evTobject = WalletobjectOutput.getEventTicketObjectFromServer(evTobjectID, authedSession)
+    #
+    #     if not evTobject['hasUsers']:
+    #         WalletobjectOutput.shredEventTicketObject(op, authedSession)

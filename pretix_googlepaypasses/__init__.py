@@ -11,6 +11,7 @@ class GooglePayPassesApp(AppConfig):
         name = ugettext_lazy('Google Pay Passes')
         author = 'Martin Gross'
         description = ugettext_lazy('Provides Google Pay Passes for pretix')
+        category = 'FORMAT'
         visible = True
         version = '1.0.0'
 

@@ -1,25 +1,24 @@
 import json
-import uuid
 from collections import OrderedDict
 from typing import Tuple
 from urllib.parse import urljoin
 
+from walletobjects.comms import Comms
 from django import forms
 from django.conf import settings as django_settings
-from django.utils import translation
 from django.utils.translation import ugettext, ugettext_lazy as _
-from google.auth import crypt, jwt
-from google.auth.transport.requests import AuthorizedSession
-from google.oauth2 import service_account
-from pretix.base.models import OrderPosition, RequiredAction
+
+
+from helpers import get_class_id, get_translated_string, get_translated_dict, get_object_id
+from pretix.base.models import OrderPosition, Event
 from pretix.base.settings import GlobalSettingsObject
 from pretix.base.ticketoutput import BaseTicketOutput
 from pretix.multidomain.urlreverse import build_absolute_uri
-from walletobjects import buttonJWT, eventTicketClass, eventTicketObject
+from walletobjects import ButtonJWT, EventTicketClass, EventTicketObject
 from walletobjects.constants import (
-    barcode, confirmationCode, doorsOpen,
-    multipleDevicesAndHoldersAllowedStatus, objectState, reviewStatus,
-    seat)
+    Barcode, ConfirmationCode, DoorsOpen,
+    MultipleDevicesAndHoldersAllowedStatus, ObjectState, ReviewStatus,
+    Seat, ClassType, ObjectType)
 
 from .forms import PNGImageField
 
@@ -96,178 +95,99 @@ class WalletobjectOutput(BaseTicketOutput):
         order = order_position.order
         ev = order_position.subevent or order.event
 
-        generated_jwt = WalletobjectOutput.getWalletObjectJWT(order, order_position.pk)
+        generated_jwt = self._get_jwt(order_position)
 
         if generated_jwt:
             return 'googlepaypass', 'text/uri-list', 'https://pay.google.com/gp/v/save/%s' % generated_jwt
         else:
             return False
 
-    def getWalletObjectJWT(order, positionid):
-        if not order:
+    def _get_jwt(self, op: OrderPosition):
+        if not self._get_class(op.order.event):
             return False
 
-        authedSession = WalletobjectOutput.getAuthedSession(order.event.settings)
+        ticket_object = self._get_object(op)
 
-        if not authedSession:
+        if not ticket_object:
             return False
 
-        eventTicketClass = WalletobjectOutput.getOrgenerateEventTicketClass(order.event, authedSession)
-
-        if not eventTicketClass:
-            return False
-
-        op = OrderPosition.objects.get(order=order, id=positionid)
-
-        if not op:
-            return False
-
-        eventTicketObject = WalletobjectOutput.getOrGenerateEventTicketObject(op, authedSession)
-
-        if not eventTicketObject:
-            return False
-
-        walletobjectJWT = WalletobjectOutput.generateWalletobjectJWT(order.event.settings, eventTicketObject)
-
-        if not walletobjectJWT:
-            return False
-
-        return walletobjectJWT
-
-    def getAuthedSession(settings):
-        try:
-            credentials = service_account.Credentials.from_service_account_info(
-                json.loads(settings.get('googlepaypasses_credentials')),
-                scopes=['https://www.googleapis.com/auth/wallet_object.issuer'],
+        return self._comms().sign_jwt(
+            ButtonJWT(
+                origins=[django_settings.SITE_URL],
+                issuer=self._comms().client_email,
+                # event_ticket_objects=[json.loads(str(ticket_object))],
+                event_ticket_objects=[ticket_object],
+                skinny=True
             )
-
-            authedSession = AuthorizedSession(credentials)
-            return authedSession
-        except:
-            raise Exception('Could not get authedSession. Did you properly setup the necessary credentials?')
-
-    def constructClassID(event):
-        gs = GlobalSettingsObject()
-        if not gs.settings.get('update_check_id'):
-            gs.settings.set('update_check_id', uuid.uuid4().hex)
-
-        issuerId = event.settings.get('googlepaypasses_issuer_id')
-
-        return "%s.pretix-%s-%s-%s" % (issuerId, gs.settings.get('update_check_id'),
-                                       event.organizer.slug, event.slug)
-
-    def constructObjectID(op):
-        gs = GlobalSettingsObject()
-        if not gs.settings.get('update_check_id'):
-            gs.settings.set('update_check_id', uuid.uuid4().hex)
-
-        issuerId = op.order.event.settings.get('googlepaypasses_issuer_id')
-
-        return "%s.pretix-%s-%s-%s-%s-%s-%s" % (issuerId, gs.settings.get('update_check_id'),
-                                                op.order.event.organizer.slug, op.order.event.slug,
-                                                op.order.code, op.positionid, uuid.uuid4().hex)
-
-    def getOrgenerateEventTicketClass(event, authedSession):
-        eventTicketClassName = WalletobjectOutput.constructClassID(event)
-        result = authedSession.get(
-            'https://www.googleapis.com/walletobjects/v1/eventTicketClass/%s' % (eventTicketClassName)
         )
 
-        if result.status_code == 404:
-            return WalletobjectOutput.generateEventTicketClass(event, authedSession)
-        elif result.status_code == 200:
-            return eventTicketClassName
-        else:
+    def _comms(self):
+        if not hasattr(self, '__comms'):
+            self.__comms = Comms(self.event.settings.get('googlepaypasses_credentials'))
+
+        return self.__comms
+
+    def _get_class(self, event: Event):
+        ticket_class = get_class_id(event)
+
+        item = self._comms().get_item(ClassType.eventTicketClass, ticket_class)
+
+        if item is None:
             return False
-
-    def checkIfEventTicketClassExists(event, authedSession):
-        eventTicketClassName = WalletobjectOutput.constructClassID(event)
-        result = authedSession.get(
-            'https://www.googleapis.com/walletobjects/v1/eventTicketClass/%s' % (eventTicketClassName)
-        )
-
-        if result.status_code == 200:
-            return eventTicketClassName
+        elif not item:
+            return self._generate_class(event)
         else:
-            return False
+            return ticket_class
 
-    def getOrGenerateEventTicketObject(op, authedSession):
-        meta_info = json.loads(op.meta_info or '{}')
-
-        if 'googlepaypass' in meta_info:
-            eventTicketObject = WalletobjectOutput.generateEventTicketObject(op, authedSession, update=True, ship=False)
-        else:
-            eventTicketObject = WalletobjectOutput.generateEventTicketObject(op, authedSession)
-
-        if eventTicketObject and 'googlepaypass' not in meta_info:
-            meta_info['googlepaypass'] = eventTicketObject['id']
-            op.meta_info = json.dumps(meta_info)
-            op.save(update_fields=['meta_info'])
-            return eventTicketObject
-        elif eventTicketObject and 'googlepaypass' in meta_info:
-            return eventTicketObject
-        else:
-            return False
-
-    def getEventTicketObjectFromServer(objectID, authedSession):
-        result = authedSession.get(
-            'https://www.googleapis.com/walletobjects/v1/eventTicketObject/%s' % (objectID)
-        )
-
-        if result.status_code == 200:
-            return json.loads(result.text)
-        else:
-            return False
-
-    def generateEventTicketClass(event, authedSession, update=False):
+    def _generate_class(self, event: Event):
         gs = GlobalSettingsObject()
-        eventTicketClassName = WalletobjectOutput.constructClassID(event)
+        class_name = get_class_id(event)
 
-        evTclass = eventTicketClass(
+        output_class = EventTicketClass(
             event.organizer.name,
-            eventTicketClassName,
-            multipleDevicesAndHoldersAllowedStatus.multipleHolders,  # TODO: Make configurable
+            class_name,
+            MultipleDevicesAndHoldersAllowedStatus.multipleHolders,  # TODO: Make configurable
             event.name,
-            reviewStatus.underReview,
+            ReviewStatus.underReview,
             event.settings.locale
         )
 
-        evTclass.homepageUri(
+        output_class.homepage_uri(
             build_absolute_uri(event, 'presale:event.index'),
-            WalletobjectOutput.getTranslatedString('Website', event.settings.get('locale')),
-            WalletobjectOutput.getTranslatedDict('Website', event.settings.get('locales'))
+            get_translated_string('Website', event.settings.get('locale')),
+            get_translated_dict('Website', event.settings.get('locales'))
         )
 
-        evTclass.callbackUrl(build_absolute_uri(event.organizer, 'plugins:pretix_googlepaypasses:webhook'))
+        output_class.callback_url(build_absolute_uri(event.organizer, 'plugins:pretix_googlepaypasses:webhook'))
 
         if (event.settings.get('ticketoutput_googlepaypasses_latitude')
                 and event.settings.get('ticketoutput_googlepaypasses_longitude')):
-            evTclass.locations(
+            output_class.locations(
                 event.settings.get('ticketoutput_googlepaypasses_latitude'),
                 event.settings.get('ticketoutput_googlepaypasses_longitude')
             )
         elif event.geo_lat and event.geo_lon:
-            evTclass.locations(
+            output_class.locations(
                 event.geo_lat,
                 event.geo_lon
             )
 
-        evTclass.countryCode(event.settings.get('locale'))
+        output_class.country_code(event.settings.get('locale'))
 
-        evTclass.hideBarcode(False)
+        output_class.hide_barcode(False)
 
         if event.settings.get('ticketoutput_googlepaypasses_hero'):
-            evTclass.heroImage(
+            output_class.hero_image(
                 urljoin(django_settings.SITE_URL, event.settings.get('ticketoutput_googlepaypasses_hero').url),
                 str(event.name),
                 event.name,
             )
 
-        evTclass.hexBackgroundColor(event.settings.get('primary_color'))
-        evTclass.eventId('pretix-%s-%s-%s' % (gs.settings.get('update_check_id'), event.organizer.id, event.id))
+        output_class.hex_background_color(event.settings.get('primary_color'))
+        output_class.event_id('pretix-%s-%s-%s' % (gs.settings.get('update_check_id'), event.organizer.id, event.id))
 
         if event.settings.get('ticketoutput_googlepaypasses_logo'):
-            evTclass.logo(
+            output_class.logo(
                 urljoin(django_settings.SITE_URL, event.settings.get('ticketoutput_googlepaypasses_logo').url),
                 str(event.name),
                 event.name,
@@ -278,146 +198,86 @@ class WalletobjectOutput(BaseTicketOutput):
             address = {}
 
             for key, value in event.location.data.items():
-                name[key] = value.splitlines()[0]
-                address[key] = value.splitlines()[1]
+                lines = value.splitlines()
+                name[key] = lines[0]
+                # We must provide at least one address line each for the name and address - no way around it.
+                if len(lines) > 1:
+                    address[key] = '\n'.join(value.splitlines()[1:])
+                else:
+                    address[key] = lines[0]
 
-            evTclass.venue(name, address)
+            output_class.venue(name, address)
 
         if event.date_from and event.date_to and event.date_admission:
-            evTclass.dateTime(
-                doorsOpen.doorsOpen,
+            output_class.date_time(
+                DoorsOpen.doorsOpen,
                 event.date_admission.isoformat(),
                 event.date_from.isoformat(),
                 event.date_to.isoformat(),
             )
 
-        evTclass.confirmationCodeLabel(confirmationCode.orderNumber)
+        output_class.confirmation_code_label(ConfirmationCode.orderNumber)
 
         if event.seating_plan_id is not None:
-            evTclass.seatLabel(seat.seat)
+            output_class.seat_label(Seat.seat)
 
-        if update:
-            result = authedSession.put(
-                'https://www.googleapis.com/walletobjects/v1/eventTicketClass/%s?strict=true' % WalletobjectOutput.constructClassID(event),
-                json=json.loads(str(evTclass))
-            )
-        else:
-            result = authedSession.post(
-                'https://www.googleapis.com/walletobjects/v1/eventTicketClass?strict=true',
-                json=json.loads(str(evTclass))
-            )
+        return self._comms().put_item(ClassType.eventTicketClass, class_name, output_class)
 
-        if result.status_code == 200:
-            return eventTicketClassName
-        else:
-            RequiredAction.objects.get_or_create(
-                event=event, action_type='pretix_googlepaypasses.evenTicketClassFail', data=json.dumps({
-                    'status_code': result.status_code,
-                    'text': result.text,
-                    'class': str(evTclass)
-                })
-            )
-            return False
-
-    def generateEventTicketObject(op, authedSession, update=False, ship=True):
-        eventTicketClassName = WalletobjectOutput.constructClassID(op.order.event)
+    def _get_object(self, op: OrderPosition):
         meta_info = json.loads(op.meta_info or '{}')
 
-        if update:
-            evTobjectID = meta_info['googlepaypass']
+        ticket_object = self._generate_object(op)
+
+        if ticket_object and 'googlepaypass' not in meta_info:
+            meta_info['googlepaypass'] = ticket_object['id']
+            op.meta_info = json.dumps(meta_info)
+            op.save(update_fields=['meta_info'])
+            return ticket_object
+        elif ticket_object and 'googlepaypass' in meta_info:
+            return ticket_object
         else:
-            evTobjectID = WalletobjectOutput.constructObjectID(op)
+            return False
 
-        evTobject = eventTicketObject(evTobjectID, eventTicketClassName, objectState.active, op.order.event.settings.locale)
+    def _generate_object(self, op: OrderPosition):
+        class_name = get_class_id(op.order.event)
+        meta_info = json.loads(op.meta_info or '{}')
 
-        evTobject.barcode(barcode.qrCode, op.secret, op.secret)
+        if 'googlepaypass' in meta_info:
+            object_name = meta_info['googlepaypass']
+        else:
+            object_name = get_object_id(op)
 
-        evTobject.reservationInfo("%s-%s" % (op.order.event.slug, op.order.code))
-        evTobject.ticketHolderName(op.attendee_name or (op.addon_to.attendee_name if op.addon_to else ''))
-        evTobject.ticketNumber(op.secret)
-        evTobject.ticketType(
-            WalletobjectOutput.getTranslatedDict(
+        output_object = EventTicketObject(object_name, class_name, ObjectState.active, op.order.event.settings.locale)
+
+        output_object.barcode(Barcode.qrCode, op.secret, op.secret)
+
+        output_object.reservation_info("%s-%s" % (op.order.event.slug, op.order.code))
+        output_object.ticket_holder_name(op.attendee_name or (op.addon_to.attendee_name if op.addon_to else ''))
+        output_object.ticket_number(op.secret)
+        output_object.ticket_type(
+            get_translated_dict(
                 str(op.item) + (" – " + str(op.variation.value) if op.variation else ""),
                 op.order.event.settings.get('locales')
             )
         )
 
         places = django_settings.CURRENCY_PLACES.get(op.order.event.currency, 2)
-        evTobject.faceValue(int(op.price * 1000 ** places), op.order.event.currency)
+        output_object.face_value(int(op.price * 1000 ** places), op.order.event.currency)
 
         if op.order.event.seating_plan_id is not None:
             if op.seat:
-                evTobject.seat(
-                    WalletobjectOutput.getTranslatedDict(
+                output_object.seat(
+                    get_translated_dict(
                         _(str(op.seat)),
                         op.order.event.settings.get('locales')
                     )
                 )
             else:
-                evTobject.seat(
-                    WalletobjectOutput.getTranslatedDict(
+                output_object.seat(
+                    get_translated_dict(
                         _('General admission'),
                         op.order.event.settings.get('locales')
                     )
                 )
 
-        if ship:
-            if update:
-                result = authedSession.put(
-                    'https://www.googleapis.com/walletobjects/v1/eventTicketObject/%s?strict=true' % evTobjectID,
-                    json=json.loads(str(evTobject))
-                )
-            else:
-                result = authedSession.post(
-                    'https://www.googleapis.com/walletobjects/v1/eventTicketObject?strict=true',
-                    json=json.loads(str(evTobject))
-                )
-
-            if result.status_code == 200:
-                return evTobject
-            else:
-                RequiredAction.objects.get_or_create(
-                    event=op.order.event, action_type='pretix_googlepaypasses.evenTicketObjectFail', data=json.dumps({
-                        'status_code': result.status_code,
-                        'text': result.text,
-                        'object': str(evTobject)
-                    })
-                )
-                return False
-        else:
-            return evTobject
-
-    def generateWalletobjectJWT(settings, payload):
-        credentials = json.loads(settings.get('googlepaypasses_credentials'))
-
-        button = buttonJWT(
-            origins=[django_settings.SITE_URL],
-            issuer=credentials['client_email'],
-            eventTicketObjects=[json.loads(str(payload))],
-            skinny=True
-        )
-
-        signer = crypt.RSASigner.from_service_account_info(credentials)
-        payload = json.loads(str(button))
-        encoded = jwt.encode(signer, payload)
-
-        if not encoded:
-            return False
-
-        return encoded.decode("utf-8")
-
-    def getTranslatedDict(string, locales):
-        translatedDict = {}
-
-        for locale in locales:
-            translation.activate(locale)
-            translatedDict[locale] = ugettext(string)
-            translation.deactivate()
-
-        return translatedDict
-
-    def getTranslatedString(string, locale):
-        translation.activate(locale)
-        translatedString = ugettext(string)
-        translation.deactivate()
-        return translatedString
+        return self._comms().put_item(ObjectType.eventTicketObject, object_name, output_object)

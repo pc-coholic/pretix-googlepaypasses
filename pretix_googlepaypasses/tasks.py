@@ -3,19 +3,13 @@ from json import JSONDecodeError
 
 from django_scopes import scopes_disabled
 
+from .helpers import get_class_id
 from pretix.base.models import Event, Order, OrderPosition
 from pretix.celery_app import app
 from walletobjects import eventTicketObject, utils
-from walletobjects.constants import objectState
+from walletobjects.constants import ObjectState
 
 from .googlepaypasses import WalletobjectOutput
-
-
-@app.task
-def generateWalletObjectJWT(orderId, positionId):
-    order = Order.objects.get(id=orderId)
-
-    return WalletobjectOutput.getWalletObjectJWT(order, positionId)
 
 
 @app.task
@@ -30,7 +24,7 @@ def shredEventTicketObject(opId):
         return True
 
     evTobjectID = meta_info['googlepaypass']
-    eventTicketClassName = WalletobjectOutput.constructClassID(op.order.event)
+    eventTicketClassName = get_class_id(op.order.event)
     evTobject = eventTicketObject(evTobjectID, eventTicketClassName, objectState.inactive,
                                   op.order.event.settings.locale)
 

@@ -17,26 +17,6 @@ from . import tasks
 
 logger = logging.getLogger(__name__)
 
-
-class redirectToWalletObjectJWT(OrderDetailMixin, AsyncAction, View):
-    task = tasks.generateWalletObjectJWT
-
-    def get_success_url(self, value):
-        return 'https://pay.google.com/gp/v/save/%s' % value
-
-    def get_error_url(self):
-        return self.get_order_url()
-
-    def post(self, request, *args, **kwargs):
-        if not self.order:
-            raise Http404(_('Unknown order code or not authorized to access this order.'))
-
-        return self.do(self.order.id, kwargs['position'])
-
-    def get_error_message(self, exception):
-        return _("An error occured while generating your Google Pay Pass. Please try again later.")
-
-
 @csrf_exempt
 @require_POST
 def webhook(request, *args, **kwargs):
