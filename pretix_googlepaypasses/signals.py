@@ -78,16 +78,16 @@ def logentry_post_save(sender, instance, **kwargs):
         instance_data = json.loads(instance.data)
         op = OrderPosition.objects.get(order=instance.object_id, id=instance_data['position'])
 
-        tasks.refresh_object.apply_async(args=(op.id,))
+        tasks.refresh_object.apply_async(args=(op.id,), countdown=5)
     elif instance.action_type in ['pretix.event.tickets.provider.googlepaypasses', 'pretix.event.changed', 'pretix.event.settings']:
         event = Event.objects.get(id=instance.event_id)
 
-        tasks.refresh_class.apply_async(args=(event.id,))
+        tasks.refresh_class.apply_async(args=(event.id,), countdown=5)
     elif instance.action_type in ['pretix.organizer.settings']:
         events = Event.objects.filter(organizer_id=instance.object_id, plugins__contains='pretix_googlepaypasses')
 
         for event in events:
-            tasks.refresh_class.apply_async(args=(event.id,))
+            tasks.refresh_class.apply_async(args=(event.id,), countdown=5)
 
 
 @receiver(signal=periodic_task)
