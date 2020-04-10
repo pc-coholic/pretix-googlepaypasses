@@ -1,4 +1,8 @@
 $(function() {
+  if (!$('#googlepaypassesmodal .modal-dialog').length) {
+    return;
+  }
+
   $('#googlepaypassesmodal .modal-dialog').each(function() {
     // .modal-backdrop has a z-index of 1040
     // .modal has a z-index of 1050

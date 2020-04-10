@@ -2,7 +2,6 @@ import uuid
 
 from django.utils import translation
 from django.utils.translation import ugettext
-
 from pretix.base.models import Event, OrderPosition
 from pretix.base.settings import GlobalSettingsObject
 

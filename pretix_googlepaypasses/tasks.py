@@ -2,94 +2,72 @@ import json
 from json import JSONDecodeError
 
 from django_scopes import scopes_disabled
-
-from .helpers import get_class_id
-from pretix.base.models import Event, Order, OrderPosition
+from pretix.base.models import Event, OrderPosition
 from pretix.celery_app import app
-from walletobjects import eventTicketObject, utils
-from walletobjects.constants import ObjectState
-
-from .googlepaypasses import WalletobjectOutput
+from pretix_googlepaypasses.googlepaypasses import WalletobjectOutput
+from pretix_googlepaypasses.helpers import get_class_id
+from walletobjects import EventTicketObject, utils
+from walletobjects.comms import Comms
+from walletobjects.constants import ClassType, ObjectState, ObjectType
 
 
 @app.task
 @scopes_disabled()
-def shredEventTicketObject(opId):
-    op = OrderPosition.objects.get(id=opId)
-    authedSession = WalletobjectOutput.getAuthedSession(op.event.settings)
+def shred_object(op_id):
+    op = OrderPosition.objects.get(id=op_id)
 
     meta_info = json.loads(op.meta_info or '{}')
 
     if 'googlepaypass' not in meta_info:
         return True
 
-    evTobjectID = meta_info['googlepaypass']
-    eventTicketClassName = get_class_id(op.order.event)
-    evTobject = eventTicketObject(evTobjectID, eventTicketClassName, objectState.inactive,
-                                  op.order.event.settings.locale)
+    object_id = meta_info['googlepaypass']
+    class_id = get_class_id(op.order.event)
+    output_class = EventTicketObject(object_id, class_id, ObjectState.inactive, op.order.event.settings.locale)
+    comms = Comms(op.event.settings.get('googlepaypasses_credentials'))
 
-    result = authedSession.put(
-        'https://www.googleapis.com/walletobjects/v1/eventTicketObject/%s?strict=true' % evTobjectID,
-        json=json.loads(str(evTobject))
-    )
-
-    if result.status_code == 200:
+    if comms.put_item(ClassType.eventTicketClass, class_id, output_class):
         # Remove googlepaypass from OrderPostition meta_info once it has been shredded
         meta_info.pop('googlepaypass')
         op.meta_info = json.dumps(meta_info)
         op.save(update_fields=['meta_info'])
         return True
-    else:
-        print(result.status_code)
-        print(result.text)
-        return False
 
 
 @app.task
-def generateEventTicketClassIfExisting(eventId):
-    event = Event.objects.get(id=eventId)
-    authedSession = WalletobjectOutput.getAuthedSession(event.settings)
+def refresh_object(op_id):
+    op = OrderPosition.objects.get(id=op_id)
+    meta_info = json.loads(op.meta_info or '{}')
 
-    if WalletobjectOutput.checkIfEventTicketClassExists(event, authedSession):
-        generateEventTicketClass.apply_async(args=(event.id, True))
+    if 'googlepaypass' not in meta_info:
+        return True
 
+    object_id = meta_info['googlepaypass']
+    comms = Comms(op.event.settings.get('googlepaypasses_credentials'))
 
-@app.task
-def generateEventTicketClass(eventId, update=False):
-    event = Event.objects.get(id=eventId)
-    authedSession = WalletobjectOutput.getAuthedSession(event.settings)
-
-    WalletobjectOutput.generateEventTicketClass(event, authedSession, update)
+    if comms.get_item(ObjectType.eventTicketObject, object_id):
+        return WalletobjectOutput(op.event).generate(op)
 
 
 @app.task
-def generateEventTicketObjectIfExisting(opId):
-    op = OrderPosition.objects.get(id=opId)
-    authedSession = WalletobjectOutput.getAuthedSession(op.event.settings)
+def refresh_class(event_id):
+    event = Event.objects.get(id=event_id)
+    comms = Comms(event.settings.get('googlepaypasses_credentials'))
+    class_id = get_class_id(event)
 
-    walletObject = WalletobjectOutput.getOrGenerateEventTicketObject(op, authedSession)
-
-    if (walletObject):
-        generateEventTicketObject.apply_async(args=(opId, True, True))
-
-
-@app.task
-def generateEventTicketObject(opId, update=False, ship=False):
-    op = OrderPosition.objects.get(id=opId)
-    authedSession = WalletobjectOutput.getAuthedSession(op.event.settings)
-
-    WalletobjectOutput.generateEventTicketObject(op, authedSession, update, ship)
+    if comms.get_item(ClassType.eventTicketClass, class_id):
+        return WalletobjectOutput(event)._generate_class(event)
 
 
 @app.task
 @scopes_disabled()
-def procesWebhook(webhookbody, issuerId):
+def process_webhook(webhook_body, issuer_id):
     try:
-        webhook_json = json.loads(webhookbody)
+        webhook_json = json.loads(webhook_body)
     except JSONDecodeError:
         return False
 
-    webhook_json = utils.unsealCallback(webhook_json, issuerId)
+    webhook_json = utils.unseal_callback(webhook_json, issuer_id)
 
     if 'objectId' and 'eventType' in webhook_json:
         if webhook_json['eventType'] == 'del':
@@ -98,7 +76,7 @@ def procesWebhook(webhookbody, issuerId):
             ).first()
 
             if op:
-                shredEventTicketObject.apply_async(args=(op.id,))
+                shred_object.apply_async(args=(op.id,))
 
         elif webhook_json['eventType'] == 'save':
             pass

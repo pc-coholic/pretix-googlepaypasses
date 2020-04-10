@@ -19,7 +19,7 @@ def validate_json_credentials(value: str):
             json.loads(value),
             scopes=['https://www.googleapis.com/auth/wallet_object.issuer'],
         )
-    except:
+    except ValueError:
         raise ValidationError(
             _('It seems like the credentials-file is not correct. '
               'Please make sure that you pasted the entire contents of the file.'),

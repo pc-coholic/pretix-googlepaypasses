@@ -6,17 +6,16 @@ from django.db.models.signals import post_save
 from django.dispatch import receiver
 from django.template.loader import get_template
 from django.urls import resolve
-from django.utils.translation import ugettext_lazy as _
+from django.utils.translation import ugettext_lazy as _, ugettext_noop
+from i18nfield.strings import LazyI18nString
 from pretix.base.models import Event, LogEntry, OrderPosition
+from pretix.base.settings import settings_hierarkey
 from pretix.base.signals import (
     periodic_task, register_global_settings, register_ticket_outputs,
-    requiredaction_display,
 )
 from pretix.presale.signals import html_head as html_head_presale
-from pretix_googlepaypasses.googlepaypasses import WalletobjectOutput
-from .import tasks
-
-from .forms import validate_json_credentials
+from pretix_googlepaypasses import tasks
+from pretix_googlepaypasses.forms import validate_json_credentials
 
 
 @receiver(register_ticket_outputs, dispatch_uid='output_googlepaypasses')
@@ -44,12 +43,6 @@ def register_global_settings(sender, **kwargs):
             widget=forms.Textarea,
             validators=[validate_json_credentials]
         )),
-        ('passbook_gmaps_api_key', forms.CharField(
-            label=_('Google Maps API key'),
-            widget=forms.PasswordInput(render_value=True),
-            required=False,
-            help_text=_('Optional, only necessary to find coordinates automatically.')
-        )),
     ])
 
 
@@ -59,43 +52,42 @@ def html_head_presale(sender, request=None, **kwargs):
 
     if url.namespace == 'presale' and url.func.__name__ in ['OrderDetails', 'OrderPositionDetails']:
         template = get_template('pretix_googlepaypasses/presale_head.html')
-        return template.render({})
+        return template.render({'event': sender})
     else:
         return ""
 
 
 @receiver(post_save, sender=LogEntry, dispatch_uid="googlepaypasses_logentry_post_save")
 def logentry_post_save(sender, instance, **kwargs):
-    return
-    # if instance.action_type in [
-    #     'pretix.event.order.secret.changed', 'pretix.event.order.changed.secret', 'pretix.event.order.changed.cancel',
-    #     'pretix.event.order.changed.split'
-    # ]:
-    #     instanceData = json.loads(instance.data)
-    #
-    #     if 'position' and 'positionid' in instanceData:
-    #         # {"position": 4, "positionid": 1} --> changed OrderPosition
-    #         op = OrderPosition.objects.get(order=instance.object_id, id=instanceData['position'])
-    #         tasks.shredEventTicketObject.apply_async(args=(op.id,))
-    #     else:
-    #         # {} --> whole changed Order
-    #         ops = OrderPosition.objects.filter(order=instance.object_id)
-    #         for op in ops:
-    #             tasks.shredEventTicketObject.apply_async(args=(op.id,))
-    # elif instance.action_type in ['pretix.event.order.changed.item', 'pretix.event.order.changed.price', 'pretix.event.order.changed.subevent']:
-    #     instanceData = json.loads(instance.data)
-    #     op = OrderPosition.objects.get(order=instance.object_id, id=instanceData['position'])
-    #
-    #     tasks.generateEventTicketObjectIfExisting.apply_async(args=(op.id,))
-    # elif instance.action_type in ['pretix.event.tickets.provider.googlepaypasses', 'pretix.event.changed', 'pretix.event.settings']:
-    #     event = Event.objects.get(id=instance.event_id)
-    #
-    #     tasks.generateEventTicketClassIfExisting.apply_async(args=(event.id,))
-    # elif instance.action_type in ['pretix.organizer.settings']:
-    #     events = Event.objects.filter(organizer_id=instance.object_id, plugins__contains='pretix_googlepaypasses')
-    #
-    #     for event in events:
-    #         tasks.generateEventTicketClassIfExisting.apply_async(args=(event.id,))
+    if instance.action_type in [
+        'pretix.event.order.secret.changed', 'pretix.event.order.changed.secret', 'pretix.event.order.changed.cancel',
+        'pretix.event.order.changed.split'
+    ]:
+        instance_data = json.loads(instance.data)
+
+        if 'position' and 'positionid' in instance_data:
+            # {"position": 4, "positionid": 1} --> changed OrderPosition
+            op = OrderPosition.objects.get(order=instance.object_id, id=instance_data['position'])
+            tasks.shred_object.apply_async(args=(op.id,))
+        else:
+            # {} --> whole changed Order
+            ops = OrderPosition.objects.filter(order=instance.object_id)
+            for op in ops:
+                tasks.shred_object.apply_async(args=(op.id,))
+    elif instance.action_type in ['pretix.event.order.changed.item', 'pretix.event.order.changed.price', 'pretix.event.order.changed.subevent']:
+        instance_data = json.loads(instance.data)
+        op = OrderPosition.objects.get(order=instance.object_id, id=instance_data['position'])
+
+        tasks.refresh_object.apply_async(args=(op.id,))
+    elif instance.action_type in ['pretix.event.tickets.provider.googlepaypasses', 'pretix.event.changed', 'pretix.event.settings']:
+        event = Event.objects.get(id=instance.event_id)
+
+        tasks.refresh_class.apply_async(args=(event.id,))
+    elif instance.action_type in ['pretix.organizer.settings']:
+        events = Event.objects.filter(organizer_id=instance.object_id, plugins__contains='pretix_googlepaypasses')
+
+        for event in events:
+            tasks.refresh_class.apply_async(args=(event.id,))
 
 
 @receiver(signal=periodic_task)
@@ -105,18 +97,37 @@ def shred_unused_objects(sender, **kwargs):
     #
     # hasUsers - boolean - Indicates if the object has users. This field is set by the platform
     #
-    # Guess, what, it doesn't work and reports "hasUsers -> False" even when the object is installed.
+    # Guess what: it doesn't work and reports "hasUsers -> False" even when the object is installed.
     # Perhaps this is just a timing issue (Result is cached on the Google-side?) - but for now we cannot
     # offer automatic shredding of unused passes. Sucks :-(
-    return
 
     # ops = OrderPosition.objects.filter(meta_info__contains='"googlepaypass"')
     # for op in ops:
-    #     authedSession = WalletobjectOutput.getAuthedSession(op.order.event.settings)
+    #     comms = Comms(op.event.settings.get('googlepaypasses_credentials'))
     #     meta_info = json.loads(op.meta_info or '{}')
-    #     evTobjectID = meta_info['googlepaypass']
+    #     object_id = meta_info['googlepaypass']
     #
-    #     evTobject = WalletobjectOutput.getEventTicketObjectFromServer(evTobjectID, authedSession)
+    #     item = comms.get_item(ObjectType.eventTicketObject, object_id)
     #
-    #     if not evTobject['hasUsers']:
-    #         WalletobjectOutput.shredEventTicketObject(op, authedSession)
+    #     if item and not item['hasUsers']:
+    #         tasks.shred_object(op.pk)
+
+    return
+
+
+settings_hierarkey.add_default(
+    'ticketoutput_googlepaypasses_disclaimer_text',
+    LazyI18nString.from_gettext(ugettext_noop(
+        "Please be aware, that contrary to other virtual wallets/passes (like Apple Wallet), Google Pay Passes are not "
+        "handled offline. Every pass that is created, has to be transmitted to Google Inc.\r\n"
+        "\r\n"
+        "By clicking the **Save to phone**-button below, we will transfer some of your personal information, which is "
+        "necessary to provide you with your Google Pay Pass, to Google Inc.\r\n"
+        "\r\n"
+        "Please be aware, that there is no way to delete the data, once it has been transmitted.\r\n"
+        "\r\n"
+        "However we will anonymize all passes that are not linked to a device on a regular, best effort basis. While "
+        "this will remove your personal information from the pass, we cannot guarantee that Google is not keeping a "
+        "history of the previous passes.")),
+    LazyI18nString
+)

@@ -3,24 +3,26 @@ from collections import OrderedDict
 from typing import Tuple
 from urllib.parse import urljoin
 
-from walletobjects.comms import Comms
 from django import forms
 from django.conf import settings as django_settings
-from django.utils.translation import ugettext, ugettext_lazy as _
-
-
-from helpers import get_class_id, get_translated_string, get_translated_dict, get_object_id
-from pretix.base.models import OrderPosition, Event
+from django.templatetags.static import static
+from django.utils.translation import ugettext_lazy as _  # NoQA
+from i18nfield.forms import I18nFormField, I18nTextarea
+from pretix.base.models import Event, OrderPosition
 from pretix.base.settings import GlobalSettingsObject
 from pretix.base.ticketoutput import BaseTicketOutput
 from pretix.multidomain.urlreverse import build_absolute_uri
+from pretix_googlepaypasses.forms import PNGImageField
+from pretix_googlepaypasses.helpers import (
+    get_class_id, get_object_id, get_translated_dict, get_translated_string,
+)
 from walletobjects import ButtonJWT, EventTicketClass, EventTicketObject
+from walletobjects.comms import Comms
 from walletobjects.constants import (
-    Barcode, ConfirmationCode, DoorsOpen,
-    MultipleDevicesAndHoldersAllowedStatus, ObjectState, ReviewStatus,
-    Seat, ClassType, ObjectType)
-
-from .forms import PNGImageField
+    Barcode, ClassType, ConfirmationCode, DoorsOpen,
+    MultipleDevicesAndHoldersAllowedStatus, ObjectState, ObjectType,
+    ReviewStatus, Seat,
+)
 
 
 class WalletobjectOutput(BaseTicketOutput):
@@ -38,42 +40,89 @@ class WalletobjectOutput(BaseTicketOutput):
             list(super().settings_form_fields.items()) + [
                 ('dataprotection_approval',
                  forms.BooleanField(
-                     label=_('I agree to transmit my participants\' personal data to Google Inc.'),
-                     help_text=_('Please be aware, that contrary to other virtual wallets/passes (like Apple Wallet), '
-                                 'Google Pay Passes are not handled offline. Every pass that is created will be '
-                                 'transmitted to Google Inc.'
-                                 '<br><br>'
-                                 'Your participants will be prompted to agree before each transmission, but you might '
-                                 'want to add a section concerning this issue to your privacy policy.'
-                                 '<br><br>'
-                                 'If you require more information or guidance on this subject, please contact your '
-                                 'legal counsel.'),
+                     label=_("I agree to transmit my participants' personal data to Google Inc."),
+                     help_text=_("Please be aware, that contrary to other virtual wallets/passes (like Apple Wallet), "
+                                 "Google Pay Passes are not handled offline. Every pass that is created will be "
+                                 "transmitted to Google Inc., so you might want to add a section concerning this to "
+                                 "your privacy policy."
+                                 "<br><br>"
+                                 "If you require more information or guidance on this subject, please contact your "
+                                 "legal counsel."),
                      required=True,
+                 )),
+                ('show_disclaimer',
+                 forms.BooleanField(
+                     label=_("Display a privacy notice to the customers before transmitting data"),
+                     help_text=_("By default, your customers will have their Google Pay Passes generated the moment "
+                                 "they click the corresponding button. If you want to inform them of the transmission "
+                                 "of their personal information to Google beforehand, please enable this option."),
+                 )),
+                ('disclaimer_text',
+                 I18nFormField(
+                     label=_("Privacy notice"),
+                     required=False,
+                     widget=I18nTextarea,
+                     widget_kwargs={
+                         'attrs': {
+                             'data-display-dependency': '#id_ticketoutput_googlepaypasses_show_disclaimer'
+                         }
+                     },
+                     help_text=_("This text will be displayed as a privacy notice if enabled above.")
                  )),
                 ('logo',
                  PNGImageField(
-                     label=_('Event logo'),
-                     help_text=_('<a href="https://developers.google.com/pay/passes/guides/pass-verticals/event-tickets/design">#1</a> '
-                                 '- Minimum size is 660 x 660 pixels. We suggest an upload size of 1200 x 1200 pixels.'
-                                 '<br><br>'
-                                 'Google will verify that the image you are specifying here is reachable from the internetself.'
-                                 'If it is not, the passes cannot be generated and the API will return an error.'
-                                 '<br><br>'
-                                 'Please see <a href="https://developers.google.com/pay/passes/guides/get-started/api-guidelines/brand-guidelines#logo-image-guidelines">'
-                                 'Google Pay API for Passes Brand guidelines</a> for more detailed information.'),
+                     label=_("Event logo"),
+                     help_text='<div class="col-md-3">'
+                               '    <img src={}>'
+                               '</div>'
+                               '<div class="col-md-9">'
+                               '    {}'
+                               '    <br><br>'
+                               '    {}'
+                               '    <br><br>'
+                               '    {}'
+                               '    <br><br>'
+                               '    {}'
+                               '</div>'.format(
+                         static('pretix_googlepaypasses/img/DefaultTemplate_EventTicketPasses.svg'),
+                         _("Element #1"),
+                         _("Minimum size is 660 x 660 pixels. We suggest an upload size of 1200 x 1200 pixels."),
+                         _("Google will verify that the image you are specifying here is reachable from the internet. "
+                           "If it is not, the passes cannot be generated and the API will return an error."),
+                         _('Please see <a href="{}">Google Pay API for Passes Brand guidelines</a> for more detailed '
+                           'information.'.format(
+                               'https://developers.google.com/pay/passes/guides/get-started/api-guidelines/'
+                               'brand-guidelines#logo-image-guidelines')
+                           )
+                     ),
                      required=False,
                  )),
                 ('hero',
                  PNGImageField(
                      label=_('Hero image'),
-                     help_text=_('<a href="https://developers.google.com/pay/passes/guides/pass-verticals/event-tickets/design">#6</a> '
-                                 '- Minimum aspect ratio is 3:1, or wider. We suggest an upload size of 1032 x 336 pixels.'
-                                 '<br><br>'
-                                 'Google will verify that the image you are specifying here is reachable from the internetself.'
-                                 'If it is not, the passes cannot be generated and the API will return an error.'
-                                 '<br><br>'
-                                 'Please see <a href="https://developers.google.com/pay/passes/guides/get-started/api-guidelines/brand-guidelines#hero-image-guidelines">'
-                                 'Google Pay API for Passes Brand guidelines</a> for more detailed information.'),
+                     help_text='<div class="col-md-3">'
+                               '    <img src={}>'
+                               '</div>'
+                               '<div class="col-md-9">'
+                               '    {}'
+                               '    <br><br>'
+                               '    {}'
+                               '    <br><br>'
+                               '    {}'
+                               '    <br><br>'
+                               '    {}'
+                               '</div>'.format(
+                         static('pretix_googlepaypasses/img/DefaultTemplate_EventTicketPasses.svg'),
+                         _("Element #8"),
+                         _("Minimum aspect ratio is 3:1, or wider. We suggest an upload size of 1032 x 336 pixels."),
+                         _("Google will verify that the image you are specifying here is reachable from the internet. "
+                           "If it is not, the passes cannot be generated and the API will return an error."),
+                         _('Please see <a href="{}">Google Pay API for Passes Brand guidelines</a> for more detailed '
+                           'information.'.format(
+                               'https://developers.google.com/pay/passes/guides/get-started/api-guidelines/'
+                               'brand-guidelines#hero-image-guidelines')
+                           )
+                     ),
                      required=False,
                  )),
                 ('latitude',
@@ -92,34 +141,27 @@ class WalletobjectOutput(BaseTicketOutput):
         )
 
     def generate(self, order_position: OrderPosition) -> Tuple[str, str, str]:
-        order = order_position.order
-        ev = order_position.subevent or order.event
+        if not self._get_class(order_position.order.event):
+            return False
 
-        generated_jwt = self._get_jwt(order_position)
+        ticket_object = self._get_object(order_position)
+
+        if not ticket_object:
+            return False
+
+        generated_jwt = self._comms().sign_jwt(
+            ButtonJWT(
+                origins=[django_settings.SITE_URL],
+                issuer=self._comms().client_email,
+                event_ticket_objects=[ticket_object],
+                skinny=True
+            )
+        )
 
         if generated_jwt:
             return 'googlepaypass', 'text/uri-list', 'https://pay.google.com/gp/v/save/%s' % generated_jwt
         else:
             return False
-
-    def _get_jwt(self, op: OrderPosition):
-        if not self._get_class(op.order.event):
-            return False
-
-        ticket_object = self._get_object(op)
-
-        if not ticket_object:
-            return False
-
-        return self._comms().sign_jwt(
-            ButtonJWT(
-                origins=[django_settings.SITE_URL],
-                issuer=self._comms().client_email,
-                # event_ticket_objects=[json.loads(str(ticket_object))],
-                event_ticket_objects=[ticket_object],
-                skinny=True
-            )
-        )
 
     def _comms(self):
         if not hasattr(self, '__comms'):

@@ -2,20 +2,17 @@ import json
 import logging
 from json import JSONDecodeError
 
-from pretix.base.views.tasks import AsyncAction
 from django.http import (
-    Http404, HttpResponse, HttpResponseBadRequest, HttpResponseForbidden
+    HttpResponse, HttpResponseBadRequest, HttpResponseForbidden,
 )
-from django.utils.translation import ugettext_lazy as _
-from django.views import View
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 from pretix.base.models import Organizer
-from pretix.presale.views.order import OrderDetailMixin
 
 from . import tasks
 
 logger = logging.getLogger(__name__)
+
 
 @csrf_exempt
 @require_POST
@@ -38,6 +35,8 @@ def webhook(request, *args, **kwargs):
             slug=request.resolver_match.kwargs['organizer'],
         ).first()
 
-        tasks.procesWebhook.apply_async(args=(request.body.decode('utf-8'), organizer.settings.googlepaypasses_issuer_id))
+        tasks.process_webhook.apply_async(
+            args=(request.body.decode('utf-8'), organizer.settings.googlepaypasses_issuer_id)
+        )
 
     return HttpResponse()

@@ -1,12 +1,11 @@
-import json
-
 from django.core.management.base import BaseCommand
 from pretix.base.settings import GlobalSettingsObject
-from pretix_googlepaypasses.googlepaypasses import WalletobjectOutput
+from walletobjects import ClassType
+from walletobjects.comms import Comms
 
 
 class Command(BaseCommand):
-    help = "Query the Google Pay API for Passes for registred eventticketclasses"
+    help = "Query the Google Pay API for Passes for registered eventTicketClasses"
 
     def add_arguments(self, parser):
         parser.add_argument('action', type=str, nargs='?')
@@ -14,13 +13,10 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         gs = GlobalSettingsObject()
-        authedSession = WalletobjectOutput.getAuthedSession(gs.settings)
+        comms = Comms(gs.settings.get('googlepaypasses_credentials'))
 
         if options['action'] == 'list':
-            result = authedSession.get(
-                'https://www.googleapis.com/walletobjects/v1/eventTicketClass?issuerId=%s' % (gs.settings.googlepaypasses_issuer_id)
-            )
-            result = json.loads(result.text)
+            result = comms.list_items(ClassType.eventTicketClass, issuer_id=gs.settings.googlepaypasses_issuer_id)
 
             for resource in result['resources']:
                 print(resource['id'])
@@ -28,9 +24,6 @@ class Command(BaseCommand):
             if not options['param']:
                 print('No classID specified')
             else:
-                result = authedSession.get(
-                    'https://www.googleapis.com/walletobjects/v1/eventTicketClass/%s' % (options['param'])
-                )
-                print(result.text)
+                print(comms.get_item(ClassType.eventTicketClass, options['param']))
         else:
             print('Unknown action. Use either \'list\' or \'print <classID>\'')
