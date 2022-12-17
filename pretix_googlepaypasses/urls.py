@@ -1,6 +1,6 @@
-from django.conf.urls import url
+from django.urls import re_path
 from pretix_googlepaypasses.views import webhook
 
 urlpatterns = [
-    url(r'^_googlepaypasses/webhook/(?P<organizer>[^/]+)/$', webhook, name='webhook'),
+    re_path(r'^_googlepaypasses/webhook/(?P<organizer>[^/]+)/$', webhook, name='webhook'),
 ]
