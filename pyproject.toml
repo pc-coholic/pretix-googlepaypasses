@@ -1,0 +1,42 @@
+[project]
+name = "pretix-googlepaypasses"
+dynamic = ["version"]
+description = "Provides Google Pay Passes for pretix"
+readme = "README.rst"
+requires-python = ">=3.9"
+license = {file = "LICENSE"}
+keywords = ["pretix"]
+authors = [
+    {name = "Martin Gross"},
+]
+maintainers = [
+    {name = "Martin Gross"},
+]
+
+dependencies = [
+]
+
+[project.entry-points."pretix.plugin"]
+googlepaypasses = "pretix_googlepaypasses:PretixPluginMeta"
+
+[project.entry-points."distutils.commands"]
+build = "pretix_plugin_build.build:CustomBuild"
+
+[build-system]
+requires = [
+    "setuptools",
+    "pretix-plugin-build",
+]
+
+[project.urls]
+homepage = "https://github.com/pc-coholic/pretix-googlepaypasses"
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.dynamic]
+version = {attr = "pretix_googlepaypasses.__version__"}
+
+[tool.setuptools.packages.find]
+include = ["pretix*"]
+namespaces = false
