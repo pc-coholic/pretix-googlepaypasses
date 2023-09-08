@@ -6,7 +6,7 @@ from urllib.parse import urljoin
 from django import forms
 from django.conf import settings as django_settings
 from django.templatetags.static import static
-from django.utils.translation import ugettext_lazy as _  # NoQA
+from django.utils.translation import gettext_lazy as _  # NoQA
 from i18nfield.forms import I18nFormField, I18nTextarea
 from pretix.base.models import Event, OrderPosition
 from pretix.base.settings import GlobalSettingsObject

@@ -1,6 +1,6 @@
 from django.apps import AppConfig
 from django.utils.functional import cached_property
-from django.utils.translation import ugettext_lazy
+from django.utils.translation import gettext_lazy
 
 
 class GooglePayPassesApp(AppConfig):
@@ -8,9 +8,9 @@ class GooglePayPassesApp(AppConfig):
     verbose_name = 'Google Pay Passes'
 
     class PretixPluginMeta:
-        name = ugettext_lazy('Google Pay Passes')
+        name = gettext_lazy('Google Pay Passes')
         author = 'Martin Gross'
-        description = ugettext_lazy('Provides Google Pay Passes for pretix')
+        description = gettext_lazy('Provides Google Pay Passes for pretix')
         category = 'FORMAT'
         visible = True
         version = '1.0.0'
