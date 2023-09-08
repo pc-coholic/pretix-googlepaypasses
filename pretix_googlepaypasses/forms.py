@@ -5,7 +5,7 @@ import tempfile
 from django import forms
 from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile, UploadedFile
-from django.utils.translation import ugettext_lazy as _
+from django.utils.translation import gettext_lazy as _
 from google.oauth2 import service_account
 from pretix.control.forms import ClearableBasenameFileInput
 

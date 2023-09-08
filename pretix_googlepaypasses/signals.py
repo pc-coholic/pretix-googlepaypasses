@@ -6,7 +6,7 @@ from django.db.models.signals import post_save
 from django.dispatch import receiver
 from django.template.loader import get_template
 from django.urls import resolve
-from django.utils.translation import ugettext_lazy as _, ugettext_noop
+from django.utils.translation import gettext_lazy as _, gettext_noop
 from i18nfield.strings import LazyI18nString
 from pretix.base.models import Event, LogEntry, OrderPosition
 from pretix.base.settings import settings_hierarkey
@@ -117,7 +117,7 @@ def shred_unused_objects(sender, **kwargs):
 
 settings_hierarkey.add_default(
     'ticketoutput_googlepaypasses_disclaimer_text',
-    LazyI18nString.from_gettext(ugettext_noop(
+    LazyI18nString.from_gettext(gettext_noop(
         "Please be aware, that contrary to other virtual wallets/passes (like Apple Wallet), Google Pay Passes are not "
         "handled offline. Every pass that is created, has to be transmitted to Google Inc.\r\n"
         "\r\n"

@@ -1,7 +1,7 @@
 import uuid
 
 from django.utils import translation
-from django.utils.translation import ugettext
+from django.utils.translation import gettext
 from pretix.base.models import Event, OrderPosition
 from pretix.base.settings import GlobalSettingsObject
 
@@ -33,7 +33,7 @@ def get_translated_dict(string, locales):
 
     for locale in locales:
         translation.activate(locale)
-        translated[locale] = ugettext(string)
+        translated[locale] = gettext(string)
         translation.deactivate()
 
     return translated
@@ -41,7 +41,7 @@ def get_translated_dict(string, locales):
 
 def get_translated_string(string, locale):
     translation.activate(locale)
-    translated = ugettext(string)
+    translated = gettext(string)
     translation.deactivate()
 
     return translated
